@@ -272,7 +272,7 @@ BOOL ChangeDisplayPosition(MONITOR *mon) {
     return ret == DISP_CHANGE_SUCCESSFUL;
 }
 
-VOID ShowNotificationMessage(STRSAFE_LPCWSTR message) {
+VOID ShowNotificationMessage(STRSAFE_LPCWSTR format, ...) {
     // Build the notification
     NOTIFYICONDATA nid = {0};
     nid.cbSize = sizeof(NOTIFYICONDATA);
@@ -280,7 +280,11 @@ VOID ShowNotificationMessage(STRSAFE_LPCWSTR message) {
     nid.uFlags = NIF_GUID | NIF_SHOWTIP | NIF_INFO;
     nid.dwInfoFlags = NIIF_RESPECT_QUIET_TIME;
     StringCchCopy(nid.szInfoTitle, ARRAYSIZE(nid.szInfoTitle), APP_NAME);
-    StringCchCopy(nid.szInfo, ARRAYSIZE(nid.szInfo), message);
+    // Format and copy message to szInfo
+    va_list args;
+    va_start(args, format);
+    StringCbVPrintf(nid.szInfo, ARRAYSIZE(nid.szInfo), format, args);
+    va_end(args);
     // Show the notification
     Shell_NotifyIcon(NIM_MODIFY, &nid);
 }
@@ -317,11 +321,8 @@ BOOL ChangeDisplayOrientation(MONITOR *mon, BYTE orientation) {
         PopulateDisplayData();
         // Rebuild the tray menu
         CreateTrayMenu();
-        // Build a notification message
-        wchar_t msgStr[512];
-        StringCbPrintf(msgStr, 512, L"Changed display %s orientation to %s", mon->friendlyName, orientation_str[orientation]);
-        // Show the notification
-        ShowNotificationMessage(msgStr);
+        // Show a notification
+        ShowNotificationMessage(L"Changed display %s orientation to %s", mon->friendlyName, orientation_str[orientation]);
     }
     fflush(stdout);
 

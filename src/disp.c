@@ -317,10 +317,6 @@ BOOL ChangeDisplayOrientation(MONITOR *mon, BYTE orientation) {
         wprintf(L"Display change failed: 0x%04X\n", ret);
     } else {
         wprintf(L"Display change was successful\n");
-        // Re-enumerate displays
-        PopulateDisplayData();
-        // Rebuild the tray menu
-        CreateTrayMenu();
         // Show a notification
         ShowNotificationMessage(L"Changed display %s orientation to %s", mon->friendlyName, orientation_str[orientation]);
     }
@@ -330,8 +326,6 @@ BOOL ChangeDisplayOrientation(MONITOR *mon, BYTE orientation) {
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-
-    // TODO: Receive information about display changes to update data
 
     switch (uMsg) {
         case WM_DESTROY: ;
@@ -415,6 +409,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
                 fflush(stdout);
                 ChangeDisplayOrientation(&monitors[monitorIdx], orientation);
             }
+            break;
+
+        case WM_DISPLAYCHANGE: ;
+            // Display settings have changed
+            wprintf(L"WM_DISPLAYCHANGE: Display settings have changed\n");
+            fflush(stdout);
+            PopulateDisplayData();
+            CreateTrayMenu();
             break;
 
         default:

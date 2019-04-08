@@ -33,7 +33,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <shellapi.h>
 #include <Objbase.h>    // This can be removed if the notification GUID is hardcoded
 
-#define APP_NAME L"Display manager"
+#define APP_NAME L"disp"
 #define APP_VER L"0.1.0"
 
 #define MSG_NOTIFYICON (WM_APP+1)
@@ -487,7 +487,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nS
     CreateTrayMenu();
 
     // Show a notification
-    ShowNotificationMessage(L"Display manager is running");
+    ShowNotificationMessage(L"Display settings manager is running");
 
     wprintf(L"Ready\n");
     fflush(stdout);

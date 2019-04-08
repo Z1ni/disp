@@ -34,7 +34,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Objbase.h>    // This can be removed if the notification GUID is hardcoded
 
 #define APP_NAME L"Display manager"
-#define APP_VER L"0.0.1"
+#define APP_VER L"0.1.0"
 
 #define MSG_NOTIFYICON (WM_APP+1)
 #define NOTIF_MENU_EXIT 1

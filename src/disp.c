@@ -33,10 +33,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <shellapi.h>
 #include <Objbase.h>    // This can be removed if the notification GUID is hardcoded
 
-
-MONITOR monitors[10];
-size_t monCount = 0;
-VIRT_SIZE virtSize = {0};
+#include "disp.h"
+#include "config.h"
 
 LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
 
@@ -46,39 +44,53 @@ HMENU notifMenu = NULL;
 
 // TODO: Implement proper logging
 
+static void free_monitors(app_ctx_t *ctx) {
+    free(ctx->monitors);
+    ctx->monitors = NULL;
+}
+
 BOOL CALLBACK MonitorEnumProc(HMONITOR mon, HDC hdc_mon, LPRECT lprc_mon, LPARAM dw_data) {
+    app_ctx_t *ctx = (app_ctx_t *) dw_data;
+
     MONITORINFOEX info = {
         .cbSize = sizeof(MONITORINFOEX)
     };
     GetMonitorInfo(mon, (LPMONITORINFO)&info);
 
-    MONITOR mon_s = {0};
-    StringCchCopy(mon_s.name, CCHDEVICENAME, info.szDevice);
-    mon_s.rect = info.rcMonitor;
-    monitors[monCount++] = mon_s;
+    StringCchCopy(ctx->monitors[ctx->monitor_count].name, CCHDEVICENAME, info.szDevice);
+    ctx->monitors[ctx->monitor_count].rect = info.rcMonitor;
+
+    ctx->monitor_count++;
 
     return TRUE;
 }
 
-VOID PopulateDisplayData() {
+VOID PopulateDisplayData(app_ctx_t *ctx) {
     int virtWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
     int virtHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 
-    virtSize.width = virtWidth;
-    virtSize.height = virtHeight;
+    ctx->display_virtual_size.width = virtWidth;
+    ctx->display_virtual_size.height = virtHeight;
 
-    monCount = 0;
-    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
+    // Free monitor data if needed
+    if (ctx->monitors != NULL) {
+        free_monitors(ctx);
+    }
 
-    for (size_t i = 0; i < monCount; i++) {
-        MONITOR mon = monitors[i];
-        mon.devmode.dmSize = sizeof(DEVMODE);
+    ctx->monitor_count = 0;
+    // TODO: Reallocate when needed
+    ctx->monitors = calloc(10, sizeof(monitor_t));
+
+    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM) ctx);
+
+    for (size_t i = 0; i < ctx->monitor_count; i++) {
+        monitor_t mon = ctx->monitors[i];
         DEVMODE tmp = {0};
         tmp.dmSize = sizeof(DEVMODE);
         EnumDisplaySettings(mon.name, ENUM_CURRENT_SETTINGS, &tmp);
 
-        monitors[i].devmode = tmp;
-        monitors[i].virtPos = monitors[i].devmode.dmPosition;
+        memcpy(&(ctx->monitors[i].devmode), &tmp, sizeof(DEVMODE));
+        memcpy(&(ctx->monitors[i].virtPos), &tmp.dmPosition, sizeof(POINTL));
     }
 
     // Get GDI and SetupAPI display names so that we can associate correct friendly monitor names
@@ -98,10 +110,10 @@ VOID PopulateDisplayData() {
             continue;
         }
 
-        // Find corresponding MONITOR entry
+        // Find corresponding monitor_t entry
         int monitorIdx = -1;
-        for (size_t i = 0; i < monCount; i++) {
-            if (wcscmp(monitors[i].name, dd.DeviceName) != 0) {
+        for (size_t i = 0; i < ctx->monitor_count; i++) {
+            if (wcscmp(ctx->monitors[i].name, dd.DeviceName) != 0) {
                 continue;
             }
             monitorIdx = (int)i;
@@ -117,8 +129,8 @@ VOID PopulateDisplayData() {
 
         // Enumerate monitors
         while (EnumDisplayDevices(dd.DeviceName, devMon, &ddMon, EDD_GET_DEVICE_INTERFACE_NAME)) {
-            // Copy the device ID to the MONITOR entry
-            StringCchCopy(monitors[monitorIdx].deviceId, 128, ddMon.DeviceID);
+            // Copy the device ID to the monitor_t entry
+            StringCchCopy(ctx->monitors[monitorIdx].deviceId, 128, ddMon.DeviceID);
 
             devMon++;
             ZeroMemory(&ddMon, sizeof(DISPLAY_DEVICE));
@@ -174,12 +186,12 @@ VOID PopulateDisplayData() {
         }
         // Find corresponding monitor entry and set the friendly name
         BOOL foundMonitor = FALSE;
-        for (size_t i = 0; i < monCount; i++) {
-            if (wcscmp(monitors[i].deviceId, deviceName.monitorDevicePath) != 0) {
+        for (size_t i = 0; i < ctx->monitor_count; i++) {
+            if (wcscmp(ctx->monitors[i].deviceId, deviceName.monitorDevicePath) != 0) {
                 continue;
             }
             // Copy friendly name to the monitor entry
-            StringCchCopy(monitors[i].friendlyName, 64, deviceName.monitorFriendlyDeviceName);
+            StringCchCopy(ctx->monitors[i].friendlyName, 64, deviceName.monitorFriendlyDeviceName);
             foundMonitor = TRUE;
             break;
         }
@@ -192,7 +204,7 @@ VOID PopulateDisplayData() {
     free(displayModes);
 }
 
-VOID CreateTrayMenu() {
+VOID CreateTrayMenu(app_ctx_t *ctx) {
     // Create tray notification menu
 
     // Destroy existing menu if needed
@@ -207,14 +219,29 @@ VOID CreateTrayMenu() {
     AppendMenu(notifMenuConfig, MF_SEPARATOR, 0, NULL);
     AppendMenu(notifMenuConfig, MF_GRAYED, 0, L"Saved configurations");
     AppendMenu(notifMenuConfig, MF_SEPARATOR, 0, NULL);
-    // TODO: Make this dynamic
-    AppendMenu(notifMenuConfig, MF_GRAYED, 0, L"None");
+
+    // TODO: Limit listed configurations? Scrollable menu?
+
+    display_preset_t **presets;
+    int preset_count = disp_config_get_presets(&ctx->config, &presets);
+
+    if (preset_count > 0) {
+        for (int i = 0; i < preset_count; i++) {
+            display_preset_t *preset = presets[i];
+            if (preset->applicable == 0) {
+                continue;
+            }
+            AppendMenu(notifMenuConfig, 0, NOTIF_MENU_CONFIG_SELECT | (i & NOTIF_MENU_CONFIG_INDEX), preset->name);
+        }
+    } else {
+        AppendMenu(notifMenuConfig, MF_GRAYED, 0, L"None");
+    }
 
     AppendMenu(notifMenu, MF_GRAYED, 0, APP_NAME L" " APP_VER);
     AppendMenu(notifMenu, MF_SEPARATOR, 0, NULL);
 
-    for (size_t i = 0; i < monCount; i++) {
-        MONITOR mon = monitors[i];
+    for (size_t i = 0; i < ctx->monitor_count; i++) {
+        monitor_t mon = ctx->monitors[i];
         // Create monitor -> orientation menu
         HMENU monOrientMenuConf = CreatePopupMenu();
         for (size_t a = 0; a < 4; a++) {
@@ -239,7 +266,7 @@ VOID CreateTrayMenu() {
     AppendMenu(notifMenu, 0, NOTIF_MENU_EXIT, L"Exit");
 }
 
-BOOL ChangeDisplayPosition(MONITOR *mon) {
+BOOL ChangeDisplayPosition(monitor_t *mon) {
     DEVMODE tmp = mon->devmode;
     tmp.dmPosition = mon->virtPos;
     tmp.dmFields = DM_POSITION;
@@ -265,17 +292,22 @@ VOID ShowNotificationMessage(STRSAFE_LPCWSTR format, ...) {
     Shell_NotifyIcon(NIM_MODIFY, &nid);
 }
 
-BOOL ChangeDisplayOrientation(MONITOR *mon, BYTE orientation) {
+BOOL ChangeDisplayOrientation(monitor_t *mon, BYTE orientation) {
     if (mon->devmode.dmDisplayOrientation == orientation) {
         // No change
         return TRUE;
     }
 
-    DEVMODE tmp = mon->devmode;
+    // Copy monitor_t to temporary struct as a possible WM_DISPLAYCHANGE trigger
+    // creates monitor data and by doing so invalidates the monitor pointer.
+    monitor_t temp_mon = {0};
+    memcpy(&temp_mon, mon, sizeof(monitor_t));
+
+    DEVMODE tmp = temp_mon.devmode;
     tmp.dmDisplayOrientation = orientation;
     tmp.dmFields = DM_DISPLAYORIENTATION;
     // Check if we should swap dmPelsHeight and dmPelsWidth (if the change is 90 degrees)
-    DWORD diff = abs(orientation - mon->devmode.dmDisplayOrientation) % 3;
+    DWORD diff = abs(orientation - temp_mon.devmode.dmDisplayOrientation) % 3;
     if (diff < 2) {
         // 90 degree change, swap dmPelsHeight and dmPelsWidth
         DWORD tempPelsHeight = tmp.dmPelsHeight;
@@ -288,13 +320,15 @@ BOOL ChangeDisplayOrientation(MONITOR *mon, BYTE orientation) {
         fflush(stdout);
     }
 
-    LONG ret = ChangeDisplaySettingsEx(mon->name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
+    // NOTE: AFTER THIS CALL MON IS POINTING TO TRASH BECAUSE WM_DISPLAYCHANGE TRIGGERS
+    LONG ret = ChangeDisplaySettingsEx(temp_mon.name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
     if (ret != DISP_CHANGE_SUCCESSFUL) {
         wprintf(L"Display change failed: 0x%04X\n", ret);
     } else {
         wprintf(L"Display change was successful\n");
         // Show a notification
-        ShowNotificationMessage(L"Changed display %s orientation to %s", mon->friendlyName, orientation_str[orientation]);
+        // TODO: Don't use friendly name as it isn't always available
+        ShowNotificationMessage(L"Changed display %s orientation to %s", temp_mon.friendlyName, orientation_str[orientation]);
     }
     fflush(stdout);
 
@@ -302,6 +336,9 @@ BOOL ChangeDisplayOrientation(MONITOR *mon, BYTE orientation) {
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+
+    // Get window pointer that points to the app context
+    app_ctx_t *ctx = (app_ctx_t *) GetWindowLongPtr(hWnd, GWLP_USERDATA);
 
     switch (uMsg) {
         case WM_DESTROY: ;
@@ -344,7 +381,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             }
             // Menu item selection
             SHORT selection = LOWORD(wParam);
-            wprintf(L"User selected: 0x%02X\n", selection);
+            wprintf(L"User selected: 0x%04X\n", selection);
             fflush(stdout);
             switch (selection) {
                 case NOTIF_MENU_EXIT: ;
@@ -358,10 +395,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
                     LPTSTR end;
                     size_t rem;
                     StringCbPrintfEx(aboutStr, 2048, &end, &rem, 0, L"Display information:\n\n");
-                    StringCbPrintfEx(end, rem, &end, &rem, 0, L"Display count: %d\n", monCount);
-                    StringCbPrintfEx(end, rem, &end, &rem, 0, L"Virtual resolution: %ldx%ld\n", virtSize.width, virtSize.height);
-                    for (size_t i = 0; i < monCount; i++) {
-                        MONITOR mon = monitors[i];
+                    StringCbPrintfEx(end, rem, &end, &rem, 0, L"Display count: %d\n", ctx->monitor_count);
+                    StringCbPrintfEx(end, rem, &end, &rem, 0, L"Virtual resolution: %ldx%ld\n", ctx->display_virtual_size.width, ctx->display_virtual_size.height);
+                    for (size_t i = 0; i < ctx->monitor_count; i++) {
+                        monitor_t mon = ctx->monitors[i];
                         StringCbPrintfEx(end, rem, &end, &rem, 0, L"%s (%s):\n", mon.friendlyName, mon.name);
                         StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Device ID: %s\n", mon.deviceId);
                         StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Resolution: %ldx%ld\n", mon.rect.right-mon.rect.left, mon.rect.bottom-mon.rect.top);
@@ -377,22 +414,34 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
                     break;
             }
 
-            if (NOTIF_MENU_MONITOR_ORIENTATION_SELECT & selection) {
+            if ((NOTIF_MENU_MONITOR_ORIENTATION_SELECT & selection) == NOTIF_MENU_MONITOR_ORIENTATION_SELECT) {
                 // User made a monitor orientation selection
-                BYTE monitorIdx = selection & NOTIF_MENU_MONITOR_ORIENTATION_MONITOR;
-                BYTE orientation = (selection & NOTIF_MENU_MONITOR_ORIENTATION_POSITION) >> 10;
+                int monitorIdx = selection & NOTIF_MENU_MONITOR_ORIENTATION_MONITOR;
+                int orientation = (selection & NOTIF_MENU_MONITOR_ORIENTATION_POSITION) >> 10;
                 wprintf(L"User wants to change monitor %d orientation to %d\n", monitorIdx, orientation);
                 fflush(stdout);
-                ChangeDisplayOrientation(&monitors[monitorIdx], orientation);
+                monitor_t mon = ctx->monitors[monitorIdx];
+                ChangeDisplayOrientation(&mon, orientation);
+                break;
             }
+
+            if ((NOTIF_MENU_CONFIG_SELECT & selection) == NOTIF_MENU_CONFIG_SELECT) {
+                // Config selected
+                int config_idx = selection & NOTIF_MENU_CONFIG_INDEX;
+                wprintf(L"User wants to apply preset %d (\"%s\")\n", config_idx, ctx->config.presets[config_idx]->name);
+                fflush(stdout);
+                // TODO: Apply preset
+            }
+
             break;
 
         case WM_DISPLAYCHANGE: ;
             // Display settings have changed
             wprintf(L"WM_DISPLAYCHANGE: Display settings have changed\n");
             fflush(stdout);
-            PopulateDisplayData();
-            CreateTrayMenu();
+            PopulateDisplayData(ctx);
+            CreateTrayMenu(ctx);
+            // TODO: Reload config to check for applicable presets
             break;
 
         default:
@@ -403,8 +452,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nShowCmd) {
 
+    // TODO: Extract initializing to a new function/functions
+
     wprintf(L"Initializing\n");
     fflush(stdout);
+
+    app_ctx_t app_context = {0};
 
     WNDCLASSEX wcex = {0};
     wcex.cbSize = sizeof(WNDCLASSEX);
@@ -432,6 +485,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nS
         MessageBox(NULL, (LPCWSTR)errStr, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return 1;
     }
+    // Set app context as the window user data so WndProc can access the context without global variables
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR) &app_context);
+    // SetWindowPos is used here because SetWindowLongPtr docs tell us the following:
+    //   "Certain window data is cached, so changes you make using SetWindowLongPtr will
+    //    not take effect until you call the SetWindowPos function."
+    SetWindowPos(hWnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
 
     //ShowWindow(hWnd, nShowCmd);
     UpdateWindow(hWnd);
@@ -458,9 +517,37 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nS
     Shell_NotifyIcon(NIM_SETVERSION, &nid);
 
     // Populate display data
-    PopulateDisplayData();
-    
-    CreateTrayMenu();
+    PopulateDisplayData(&app_context);
+
+    // TODO: Create config file if it does not exist
+
+    if (disp_config_read_file("disp.cfg", &app_context.config) != DISP_CONFIG_SUCCESS) {
+        wprintf(L"Error\n");
+        return 1;
+    }
+
+    display_preset_t **presets;
+    int preset_count = disp_config_get_presets(&app_context.config, &presets);
+
+    wprintf(L"Got %d presets\n", preset_count);
+
+    // TODO: Realloc, do not hardcode
+    int *match_indicies = calloc(10, sizeof(int));
+    int match_idx_count = 0;
+
+    for (int i = 0; i < preset_count; i++) {
+        display_preset_t *preset = presets[i];
+
+        if (disp_config_preset_matches_current(preset, &app_context) == DISP_CONFIG_SUCCESS) {
+            wprintf(L"Preset \"%s\" matches with the current monitor setup\n", preset->name);
+            preset->applicable = 1;
+            match_indicies[match_idx_count++] = i;
+        } else {
+            wprintf(L"Preset \"%s\" does not match with the current monitor setup\n", preset->name);
+        }
+    }
+
+    CreateTrayMenu(&app_context);
 
     // Show a notification
     ShowNotificationMessage(L"Display settings manager is running");
@@ -474,6 +561,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nS
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    free_monitors(&app_context);
+    disp_config_destroy(&app_context.config);
 
     return (int)msg.wParam;
 }

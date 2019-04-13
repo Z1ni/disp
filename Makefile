@@ -1,8 +1,7 @@
 ARCH?=x86_64
 CC=$(ARCH)-w64-mingw32-gcc
-CFLAGS=-std=gnu99 -Wall -Wextra -Wno-unused-parameter -mwindows
-# -Iinclude/ -D__MINGW_USE_VC2005_COMPAT
-LIBS=-lole32
+CFLAGS=-std=gnu99 -Wall -Wextra -Wno-unused-parameter -Iinclude/ -D__MINGW_USE_VC2005_COMPAT -mwindows 
+LIBS=-lole32 -lconfig
 SRCDIR=src
 OBJDIR=obj
 BINDIR=bin

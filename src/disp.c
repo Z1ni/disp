@@ -33,30 +33,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <shellapi.h>
 #include <Objbase.h>    // This can be removed if the notification GUID is hardcoded
 
-#define APP_NAME L"disp"
-#define APP_VER L"0.1.0"
-
-#define MSG_NOTIFYICON (WM_APP+1)
-#define NOTIF_MENU_EXIT 1
-#define NOTIF_MENU_ABOUT_DISPLAYS 2
-#define NOTIF_MENU_CONFIG_SAVE 3
-#define NOTIF_MENU_MONITOR_ORIENTATION_SELECT 0xF000
-#define NOTIF_MENU_MONITOR_ORIENTATION_MONITOR 0x03FF
-#define NOTIF_MENU_MONITOR_ORIENTATION_POSITION 0x0C00
-
-typedef struct {
-    WCHAR name[CCHDEVICENAME];
-    WCHAR friendlyName[64];
-    RECT rect;
-    POINTL virtPos;
-    DEVMODE devmode;
-    WCHAR deviceId[128];
-} MONITOR;
-
-typedef struct {
-    int width;
-    int height;
-} VIRT_SIZE;
 
 MONITOR monitors[10];
 size_t monCount = 0;

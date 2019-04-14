@@ -38,10 +38,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
 
-GUID notify_guid;
-
-HMENU notif_menu = NULL;
-
 // TODO: Implement proper logging
 
 static void free_monitors(app_ctx_t *ctx) {
@@ -208,11 +204,11 @@ static void create_tray_menu(app_ctx_t *ctx) {
     // Create tray notification menu
 
     // Destroy existing menu if needed
-    if (notif_menu != NULL) {
-        DestroyMenu(notif_menu);
+    if (ctx->notif_menu != NULL) {
+        DestroyMenu(ctx->notif_menu);
     }
 
-    notif_menu = CreatePopupMenu();
+    ctx->notif_menu = CreatePopupMenu();
 
     HMENU notif_menu_config = CreatePopupMenu();
     AppendMenu(notif_menu_config, 0, NOTIF_MENU_CONFIG_SAVE, L"Save current configuration…");
@@ -237,8 +233,8 @@ static void create_tray_menu(app_ctx_t *ctx) {
         AppendMenu(notif_menu_config, MF_GRAYED, 0, L"None");
     }
 
-    AppendMenu(notif_menu, MF_GRAYED, 0, APP_NAME L" " APP_VER);
-    AppendMenu(notif_menu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(ctx->notif_menu, MF_GRAYED, 0, APP_NAME L" " APP_VER);
+    AppendMenu(ctx->notif_menu, MF_SEPARATOR, 0, NULL);
 
     for (size_t i = 0; i < ctx->monitor_count; i++) {
         monitor_t mon = ctx->monitors[i];
@@ -255,15 +251,15 @@ static void create_tray_menu(app_ctx_t *ctx) {
         // Create menu entry for this monitor
         wchar_t entStr[100];
         StringCbPrintf(entStr, 100, L"%s (%s)", mon.friendly_name, orientation_str[mon.devmode.dmDisplayOrientation]);
-        AppendMenu(notif_menu, MF_POPUP, (UINT_PTR)mon_sub_menu_conf, entStr);
+        AppendMenu(ctx->notif_menu, MF_POPUP, (UINT_PTR)mon_sub_menu_conf, entStr);
     }
 
-    AppendMenu(notif_menu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(notif_menu, 0, NOTIF_MENU_ABOUT_DISPLAYS, L"About displays");
-    AppendMenu(notif_menu, MF_POPUP, (UINT_PTR)notif_menu_config, L"Config");
-    AppendMenu(notif_menu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(ctx->notif_menu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(ctx->notif_menu, 0, NOTIF_MENU_ABOUT_DISPLAYS, L"About displays");
+    AppendMenu(ctx->notif_menu, MF_POPUP, (UINT_PTR)notif_menu_config, L"Config");
+    AppendMenu(ctx->notif_menu, MF_SEPARATOR, 0, NULL);
 
-    AppendMenu(notif_menu, 0, NOTIF_MENU_EXIT, L"Exit");
+    AppendMenu(ctx->notif_menu, 0, NOTIF_MENU_EXIT, L"Exit");
 }
 
 static BOOL change_display_position(monitor_t *mon) {
@@ -275,11 +271,11 @@ static BOOL change_display_position(monitor_t *mon) {
     return ret == DISP_CHANGE_SUCCESSFUL;
 }
 
-static void show_notification_message(STRSAFE_LPCWSTR format, ...) {
+static void show_notification_message(app_ctx_t *ctx, STRSAFE_LPCWSTR format, ...) {
     // Build the notification
     NOTIFYICONDATA nid = {0};
     nid.cbSize = sizeof(NOTIFYICONDATA);
-    nid.guidItem = notify_guid;
+    nid.guidItem = ctx->notify_guid;
     nid.uFlags = NIF_GUID | NIF_SHOWTIP | NIF_INFO;
     nid.dwInfoFlags = NIIF_RESPECT_QUIET_TIME;
     StringCchCopy(nid.szInfoTitle, ARRAYSIZE(nid.szInfoTitle), APP_NAME);
@@ -292,7 +288,7 @@ static void show_notification_message(STRSAFE_LPCWSTR format, ...) {
     Shell_NotifyIcon(NIM_MODIFY, &nid);
 }
 
-static BOOL change_display_orientation(monitor_t *mon, BYTE orientation) {
+static BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orientation) {
     if (mon->devmode.dmDisplayOrientation == orientation) {
         // No change
         return TRUE;
@@ -328,7 +324,7 @@ static BOOL change_display_orientation(monitor_t *mon, BYTE orientation) {
         wprintf(L"Display change was successful\n");
         // Show a notification
         // TODO: Don't use friendly name as it isn't always available
-        show_notification_message(L"Changed display %s orientation to %s", temp_mon.friendly_name, orientation_str[orientation]);
+        show_notification_message(ctx, L"Changed display %s orientation to %s", temp_mon.friendly_name, orientation_str[orientation]);
     }
     fflush(stdout);
 
@@ -346,13 +342,13 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
             NOTIFYICONDATA nid = {0};
             nid.cbSize = sizeof(NOTIFYICONDATA);
             nid.uFlags = NIF_GUID;
-            nid.guidItem = notify_guid;
+            nid.guidItem = ctx->notify_guid;
             BOOL ret = Shell_NotifyIcon(NIM_DELETE, &nid);
             if (!ret) {
                 wprintf(L"Couldn't delete notifyicon: ");
                 wprintf(L"%ld\n", GetLastError());
             }
-            DestroyMenu(notif_menu);
+            DestroyMenu(ctx->notif_menu);
             PostQuitMessage(0);
             break;
 
@@ -365,7 +361,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 
                     SetForegroundWindow(hwnd);
                     // Show popup menu
-                    if (!TrackPopupMenuEx(notif_menu, 0, menu_x, menu_y, hwnd, NULL)) {
+                    if (!TrackPopupMenuEx(ctx->notif_menu, 0, menu_x, menu_y, hwnd, NULL)) {
                         wchar_t err_str[100];
                         StringCbPrintf(err_str, 100, L"TrackPopupMenuEx failed: %ld", GetLastError());
                         MessageBoxW(hwnd, (LPCWSTR)err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
@@ -421,7 +417,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
                 wprintf(L"User wants to change monitor %d orientation to %d\n", monitor_idx, orientation);
                 fflush(stdout);
                 monitor_t mon = ctx->monitors[monitor_idx];
-                change_display_orientation(&mon, orientation);
+                change_display_orientation(ctx, &mon, orientation);
                 break;
             }
 
@@ -495,14 +491,14 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     //ShowWindow(hwnd, n_show_cmd);
     UpdateWindow(hwnd);
 
-    CoCreateGuid(&notify_guid);
+    CoCreateGuid(&app_context.notify_guid);
 
     // Create tray notification
     NOTIFYICONDATA nid = {0};
     nid.cbSize = sizeof(NOTIFYICONDATA);
     nid.hWnd = hwnd;
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_GUID | NIF_SHOWTIP;
-    nid.guidItem = notify_guid;
+    nid.guidItem = app_context.notify_guid;
     nid.uVersion = NOTIFYICON_VERSION_4;
     nid.uCallbackMessage = MSG_NOTIFYICON;
     StringCchCopy(nid.szTip, ARRAYSIZE(nid.szTip), L"Display");
@@ -550,7 +546,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     create_tray_menu(&app_context);
 
     // Show a notification
-    show_notification_message(L"Display settings manager is running");
+    show_notification_message(&app_context, L"Display settings manager is running");
 
     wprintf(L"Ready\n");
     fflush(stdout);

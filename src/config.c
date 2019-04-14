@@ -134,7 +134,7 @@ int disp_config_preset_matches_current(const display_preset_t *preset, const app
         return DISP_CONFIG_ERROR_NO_MATCH;
     }
     for (size_t i = 0; i < ctx->monitor_count; i++) {
-        if (disp_config_preset_get_display(preset, ctx->monitors[i].deviceId, NULL) == DISP_CONFIG_ERROR_NO_ENTRY) {
+        if (disp_config_preset_get_display(preset, ctx->monitors[i].device_id, NULL) == DISP_CONFIG_ERROR_NO_ENTRY) {
             // No match
             return DISP_CONFIG_ERROR_NO_MATCH;
         }

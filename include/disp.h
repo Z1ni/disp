@@ -21,11 +21,11 @@
 
 typedef struct {
     wchar_t name[CCHDEVICENAME];
-    wchar_t friendlyName[64];
+    wchar_t friendly_name[64];
     RECT rect;
-    POINTL virtPos;
+    POINTL virt_pos;
     DEVMODE devmode;
-    wchar_t deviceId[128];
+    wchar_t device_id[128];
 } monitor_t;
 
 typedef struct {

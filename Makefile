@@ -8,7 +8,7 @@ BINDIR=bin
 
 TARGET = disp-${ARCH}
 
-SOURCES  := $(filter-out $(SRCDIR)/$(EMU_TARGET).c, $(wildcard $(SRCDIR)/*.c))
+SOURCES  := $(wildcard $(SRCDIR)/*.c)
 INCLUDES := $(wildcard $(SRCDIR)/*.h)
 OBJECTS  := $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 
@@ -38,3 +38,5 @@ all: debug
 
 clean:
 	rm -f obj/*.o bin/*.exe
+
+rebuild: clean all

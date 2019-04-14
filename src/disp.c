@@ -518,7 +518,10 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     // TODO: Create config file if it does not exist
 
     if (disp_config_read_file("disp.cfg", &app_context.config) != DISP_CONFIG_SUCCESS) {
-        wprintf(L"Error\n");
+        wchar_t err_msg[1024] = {0};
+        StringCbPrintf((wchar_t *) &err_msg, 1024, L"Could not read configuration file:\n%s\n", disp_config_get_err_msg(&app_context.config));
+        MessageBox(NULL, (wchar_t *) err_msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        DestroyWindow(hwnd);
         return 1;
     }
 

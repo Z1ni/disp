@@ -1,5 +1,8 @@
+#define UNICODE
 #include <stdlib.h>
 #include <string.h>
+#include <Windows.h>
+#include <Strsafe.h>
 #include "config.h"
 
 static wchar_t *mbstowcsdup(const char *src, size_t *dest_sz) {
@@ -25,6 +28,48 @@ static wchar_t *mbstowcsdup(const char *src, size_t *dest_sz) {
     return tmp;
 }
 
+static void set_error_info(app_config_t *app_config, const config_t *libconfig_config) {
+    // Get error info from libconfig
+    config_error_t err_type = config_error_type(libconfig_config);
+    if (err_type == CONFIG_ERR_NONE) {
+        return;
+    }
+
+    const wchar_t *w_err_str = mbstowcsdup(config_error_text(libconfig_config), NULL);
+    int err_line = config_error_line(libconfig_config);
+
+    wchar_t *w_err_file = NULL;
+    const char *err_file = config_error_file(libconfig_config);
+    if (err_file != NULL) {
+        w_err_file = mbstowcsdup(err_file, NULL);
+    }
+
+    // Set app config error info
+    // Construct the error string
+    wchar_t combined_err_str[512] = {0};
+    if (err_type == CONFIG_ERR_FILE_IO) {
+        if (w_err_file == NULL) {
+            StringCbPrintf((wchar_t *) &combined_err_str, 511, L"%s", w_err_str);
+        } else {
+            StringCbPrintf((wchar_t *) &combined_err_str, 511, L"%s in %s", w_err_str, w_err_file);
+            free(w_err_file);
+        }
+    } else {
+        if (w_err_file == NULL) {
+            StringCbPrintf((wchar_t *) &combined_err_str, 511, L"%s at line %d", w_err_str, err_line);
+        } else {
+            StringCbPrintf((wchar_t *) &combined_err_str, 511, L"%s in %s at line %d", w_err_str, w_err_file, err_line);
+            free(w_err_file);
+        }
+    }
+    free((wchar_t *) w_err_str);
+    memcpy(app_config->error_str, combined_err_str, 512);
+
+    // Log
+    fwprintf(stderr, L"libconfig error: %s\n", combined_err_str);
+    fflush(stderr);
+}
+
 int disp_config_read_file(const char *path, app_config_t *app_config) {
     config_t conf;
 
@@ -32,12 +77,12 @@ int disp_config_read_file(const char *path, app_config_t *app_config) {
 
     if (config_read_file(&conf, path) == CONFIG_FALSE) {
         // Fail
-        // TODO: Get error string from libconfig
-        fprintf(stderr, "libconfig: %s on line %d\n", config_error_text(&conf), config_error_line(&conf));
+        set_error_info(app_config, &conf);
         return DISP_CONFIG_ERROR_GENERAL;
     }
 
     if (config_lookup_bool(&conf, "app.notify_on_start", &(app_config->notify_on_start)) == CONFIG_FALSE) {
+        set_error_info(app_config, &conf);
         return DISP_CONFIG_ERROR_GENERAL;
     }
 
@@ -104,6 +149,10 @@ int disp_config_read_file(const char *path, app_config_t *app_config) {
     config_destroy(&conf);
 
     return DISP_CONFIG_SUCCESS;
+}
+
+wchar_t *disp_config_get_err_msg(const app_config_t *config) {
+    return (wchar_t *)config->error_str;
 }
 
 int disp_config_get_presets(const app_config_t *config, display_preset_t ***presets) {

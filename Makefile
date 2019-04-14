@@ -1,15 +1,16 @@
 ARCH?=x86_64
 CC=$(ARCH)-w64-mingw32-gcc
-CFLAGS=-std=gnu99 -Wall -Wextra -Wno-unused-parameter -Iinclude/ -mwindows 
+CFLAGS=-std=gnu99 -Wall -Wextra -Wno-unused-parameter -Iinclude/ -Ires/ -mwindows 
 LIBS=-lole32 -lconfig
 SRCDIR=src
 OBJDIR=obj
 BINDIR=bin
+RESDIR=res
 
 TARGET = disp-${ARCH}
 
 SOURCES  := $(wildcard $(SRCDIR)/*.c)
-INCLUDES := $(wildcard $(SRCDIR)/*.h)
+INCLUDES := $(wildcard $(SRCDIR)/*.h) $(RESDIR)/resource.h
 OBJECTS  := $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 
 # debug: CFLAGS += -O0 -g3 -DDEBUG -DGIT_VERSION=\"$(shell git describe --dirty --always --tags)\"
@@ -22,8 +23,11 @@ release: clean $(BINDIR)/$(TARGET).exe strip
 strip:
 	strip -s -o $(BINDIR)/$(TARGET)-stripped.exe $(BINDIR)/$(TARGET).exe
 
+$(OBJDIR)/resources.res:
+	windres $(RESDIR)/resources.rc -O coff -o $@
+
 # Link
-$(BINDIR)/$(TARGET).exe: $(OBJECTS)
+$(BINDIR)/$(TARGET).exe: $(OBJECTS) $(OBJDIR)/resources.res
 	@mkdir -p $(@D)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
@@ -34,9 +38,9 @@ $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
 
 all: debug
 
-.PHONY: clean
+.PHONY: clean all rebuild strip release debug
 
 clean:
-	rm -f obj/*.o bin/*.exe
+	rm -f obj/*.o obj/*.res bin/*.exe
 
 rebuild: clean all

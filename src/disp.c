@@ -35,6 +35,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "disp.h"
 #include "config.h"
+#include "resource.h"
 
 LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
 
@@ -331,6 +332,61 @@ static BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orie
     return ret == DISP_CHANGE_SUCCESSFUL;
 }
 
+static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
+
+    switch (umsg) {
+        case WM_INITDIALOG: ;
+            // Set the name pointer from the init message
+            SetWindowLongPtr(hwnd, GWLP_USERDATA, lparam);
+            break;
+
+        case WM_COMMAND:
+            switch (LOWORD(wparam)) {
+                case IDOK: ;
+                    // User selected OK
+                    // Get name result pointer from the window
+                    wchar_t *res_name = (wchar_t *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
+                    // Get name from the text field
+                    if (GetDlgItemText(hwnd, IDC_PRESET_NAME, res_name, 64) == 0) {
+                        // Failed
+                        wchar_t msg[100] = {0};
+                        StringCbPrintf((wchar_t *) msg, 100, L"Failed to get dialog name string: 0x%08X", GetLastError());
+                        MessageBox(hwnd, msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+                        EndDialog(hwnd, wparam);
+                        return TRUE;
+                    }
+
+                    wprintf(L"User selected OK\n");
+                    fflush(stdout);
+                    EndDialog(hwnd, wparam);
+                    return TRUE;
+                case IDCANCEL: ;
+                    // User selected cancel
+                    wprintf(L"User selected Cancel\n");
+                    fflush(stdout);
+                    EndDialog(hwnd, wparam);
+                    return TRUE;
+            }
+            break;
+
+        default:
+            return FALSE;
+    }
+
+    return FALSE;
+}
+
+static void save_current_config(app_ctx_t *ctx) {
+    // Create input dialog
+    wprintf(L"Showing preset name dialog\n");
+    fflush(stdout);
+    wchar_t preset_name[64] = {0};
+    DialogBoxParam(NULL, MAKEINTRESOURCE(IDD_DIALOG_PRESET_SAVE), ctx->main_window_hwnd, save_dialog_proc, (LPARAM) preset_name);
+    wprintf(L"Preset name dialog closed, selected name: \"%s\"\n", &preset_name);
+    fflush(stdout);
+    // TODO: Add new preset to the app_config
+}
+
 static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
 
     // Get window pointer that points to the app context
@@ -406,7 +462,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 
                 case NOTIF_MENU_CONFIG_SAVE: ;
                     // Save current config
-                    // TODO
+                    save_current_config(ctx);
                     break;
             }
 
@@ -490,6 +546,8 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     //ShowWindow(hwnd, n_show_cmd);
     UpdateWindow(hwnd);
+
+    app_context.main_window_hwnd = hwnd;
 
     CoCreateGuid(&app_context.notify_guid);
 

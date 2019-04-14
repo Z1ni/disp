@@ -8,6 +8,7 @@ typedef struct {
 	virt_size_t display_virtual_size;
 	HMENU notif_menu;
 	GUID notify_guid;
+	HWND main_window_hwnd;
 	size_t monitor_count;
 	monitor_t *monitors;
 } app_ctx_t;

@@ -549,7 +549,9 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     create_tray_menu(&app_context);
 
     // Show a notification
-    show_notification_message(&app_context, L"Display settings manager is running");
+    if (app_context.config.notify_on_start) {
+        show_notification_message(&app_context, L"Display settings manager is running");
+    }
 
     wprintf(L"Ready\n");
     fflush(stdout);

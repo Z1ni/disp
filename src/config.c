@@ -28,6 +28,22 @@ static wchar_t *mbstowcsdup(const char *src, size_t *dest_sz) {
     return tmp;
 }
 
+static const char *wcstombs_alloc(const wchar_t *src, size_t *dest_sz) {
+    // Convert (wchar_t *) name to (char *)
+    size_t converted_count = 0;
+    size_t src_sz = wcslen(src) + 1;
+    size_t result_sz = (src_sz * sizeof(char)) * 2; // Each multibyte character is two bytes
+    char *result = calloc(src_sz, result_sz);
+    if (wcstombs_s(&converted_count, result, result_sz, src, _TRUNCATE) != 0) {
+        fwprintf(stderr, L"wcstombs_s failed: 0x%04X\n", errno);
+        abort();
+    }
+    if (dest_sz != NULL) {
+        *dest_sz = converted_count;
+    }
+    return result;
+}
+
 static void set_error_info(app_config_t *app_config, const config_t *libconfig_config) {
     // Get error info from libconfig
     config_error_t err_type = config_error_type(libconfig_config);
@@ -78,11 +94,13 @@ int disp_config_read_file(const char *path, app_config_t *app_config) {
     if (config_read_file(&conf, path) == CONFIG_FALSE) {
         // Fail
         set_error_info(app_config, &conf);
+        config_destroy(&conf);
         return DISP_CONFIG_ERROR_GENERAL;
     }
 
     if (config_lookup_bool(&conf, "app.notify_on_start", &(app_config->notify_on_start)) == CONFIG_FALSE) {
         set_error_info(app_config, &conf);
+        config_destroy(&conf);
         return DISP_CONFIG_ERROR_GENERAL;
     }
 
@@ -147,6 +165,89 @@ int disp_config_read_file(const char *path, app_config_t *app_config) {
     }
 
     config_destroy(&conf);
+
+    return DISP_CONFIG_SUCCESS;
+}
+
+int disp_config_save_file(const char *path, app_config_t *app_config) {
+    // Create config_t
+    config_t config = {0};
+
+    config_init(&config);
+
+    config_setting_t *root = config_root_setting(&config);
+    config_setting_t *app_group, *presets_list, *setting;
+
+    // Create app group
+    app_group = config_setting_add(root, "app", CONFIG_TYPE_GROUP);
+
+    // Add app group settings
+    setting = config_setting_add(app_group, "notify_on_start", CONFIG_TYPE_BOOL);
+    config_setting_set_bool(setting, app_config->notify_on_start);
+
+    // Create presets list
+    presets_list = config_setting_add(root, "presets", CONFIG_TYPE_LIST);
+
+    // Add presets
+    for (size_t i = 0; i < app_config->preset_count; i++) {
+        config_setting_t *preset_entry = config_setting_add(presets_list, NULL, CONFIG_TYPE_GROUP);
+        
+        // Name
+        const char *name_str = wcstombs_alloc(app_config->presets[i]->name, NULL);
+
+        setting = config_setting_add(preset_entry, "name", CONFIG_TYPE_STRING);
+        config_setting_set_string(setting, name_str);
+
+        // libconfig copies the passed string so we can now free the converted local version
+        free((char *) name_str);
+
+        // Displays
+        config_setting_t *displays_list = config_setting_add(preset_entry, "displays", CONFIG_TYPE_LIST);
+
+        for (size_t a = 0; a < app_config->presets[i]->display_count; a++) {
+            display_settings_t *disp_settings = app_config->presets[i]->display_conf[a];
+
+            config_setting_t *display_entry = config_setting_add(displays_list, NULL, CONFIG_TYPE_GROUP);
+
+            // Display path
+            // TODO: Does this need to be escaped?
+            const char *display_path = wcstombs_alloc(disp_settings->device_path, NULL);
+
+            setting = config_setting_add(display_entry, "display", CONFIG_TYPE_STRING);
+            config_setting_set_string(setting, display_path);
+            free((char *) display_path);
+
+            // Orientation
+            setting = config_setting_add(display_entry, "orientation", CONFIG_TYPE_INT);
+            config_setting_set_int(setting, disp_settings->orientation);
+
+            // Position
+            config_setting_t *position = config_setting_add(display_entry, "position", CONFIG_TYPE_GROUP);
+            // X
+            setting = config_setting_add(position, "x", CONFIG_TYPE_INT);
+            config_setting_set_int(setting, disp_settings->pos_x);
+            // Y
+            setting = config_setting_add(position, "y", CONFIG_TYPE_INT);
+            config_setting_set_int(setting, disp_settings->pos_y);
+
+            // Resolution
+            config_setting_t *resolution = config_setting_add(display_entry, "resolution", CONFIG_TYPE_GROUP);
+            // Width
+            setting = config_setting_add(resolution, "width", CONFIG_TYPE_INT);
+            config_setting_set_int(setting, disp_settings->width);
+            // Height
+            setting = config_setting_add(resolution, "height", CONFIG_TYPE_INT);
+            config_setting_set_int(setting, disp_settings->height);
+        }
+
+    }
+
+    if (config_write_file(&config, path) == CONFIG_FALSE) {
+        set_error_info(app_config, &config);
+        config_destroy(&config);
+        return DISP_CONFIG_ERROR_GENERAL;
+    }
+    config_destroy(&config);
 
     return DISP_CONFIG_SUCCESS;
 }

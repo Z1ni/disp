@@ -293,6 +293,52 @@ int disp_config_preset_matches_current(const display_preset_t *preset, const app
     return DISP_CONFIG_SUCCESS;
 }
 
+int disp_config_create_preset(const wchar_t *name, app_ctx_t *ctx) {
+    // Get display count
+    size_t display_count = ctx->monitor_count;
+
+    display_preset_t *preset = calloc(1, sizeof(display_preset_t));
+    display_settings_t *disp_settings;
+    monitor_t cur_monitor;
+
+    preset->name = wcsdup(name);
+    preset->display_count = display_count;
+    // Alloc memory for all display settings
+    preset->display_conf = calloc(display_count, sizeof(display_settings_t *));
+
+    for (size_t i = 0; i < display_count; i++) {
+        cur_monitor = ctx->monitors[i];
+        // Alloc memory for display settings for this monitor
+        disp_settings = calloc(1, sizeof(display_settings_t));
+        // Copy path
+        disp_settings->device_path = wcsdup((wchar_t *) cur_monitor.device_id);
+        // Copy other info
+        disp_settings->orientation = cur_monitor.devmode.dmDisplayOrientation;
+        disp_settings->pos_x = cur_monitor.virt_pos.x;
+        disp_settings->pos_y = cur_monitor.virt_pos.y;
+        disp_settings->width = cur_monitor.rect.right - cur_monitor.rect.left;
+        disp_settings->height = cur_monitor.rect.bottom - cur_monitor.rect.top;
+
+        preset->display_conf[i] = disp_settings;
+    }
+
+    // Add to config presets
+    app_config_t *config = &(ctx->config);
+    // Reallocate
+    void *realloc_ptr = realloc(config->presets, (config->preset_count + 1) * sizeof(display_preset_t *));
+    if (realloc_ptr == NULL) {
+        // Realloc failed
+        fwprintf(stderr, L"realloc failed\n");
+        abort();
+    }
+    config->presets = realloc_ptr;
+
+    config->presets[config->preset_count] = preset;
+    config->preset_count = config->preset_count + 1;
+
+    return DISP_CONFIG_SUCCESS;
+}
+
 void disp_config_destroy(app_config_t *config) {
     if (config->preset_count > 0) {
         for (size_t i = 0; i < config->preset_count; i++) {

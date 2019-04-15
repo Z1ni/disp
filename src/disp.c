@@ -332,6 +332,51 @@ static BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orie
     return ret == DISP_CHANGE_SUCCESSFUL;
 }
 
+static int read_config(app_ctx_t *ctx, BOOL reload) {
+    if (reload == TRUE) {
+        // Free previous config
+        wprintf(L"Freeing previous config\n");
+        fflush(stdout);
+        disp_config_destroy(&(ctx->config));
+    }
+    wprintf(L"Reading config\n");
+    fflush(stdout);
+    if (disp_config_read_file("disp.cfg", &(ctx->config)) != DISP_CONFIG_SUCCESS) {
+        wchar_t err_msg[1024] = {0};
+        StringCbPrintf((wchar_t *) &err_msg, 1024, L"Could not read configuration file:\n%s\n", disp_config_get_err_msg(&(ctx->config)));
+        MessageBox(NULL, (wchar_t *) err_msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        return 1;
+    }
+    return 0;
+}
+
+static void flag_matching_presets(app_ctx_t *ctx) {
+    display_preset_t **presets;
+    int preset_count = disp_config_get_presets(&(ctx->config), &presets);
+
+    wprintf(L"Got %d presets\n", preset_count);
+
+    for (int i = 0; i < preset_count; i++) {
+        display_preset_t *preset = presets[i];
+
+        if (disp_config_preset_matches_current(preset, ctx) == DISP_CONFIG_SUCCESS) {
+            wprintf(L"Preset \"%s\" matches with the current monitor setup\n", preset->name);
+            preset->applicable = 1;
+        } else {
+            wprintf(L"Preset \"%s\" does not match with the current monitor setup\n", preset->name);
+        }
+    }
+}
+
+static void reload(app_ctx_t *ctx) {
+    wprintf(L"Reloading\n");
+    fflush(stdout);
+    populate_display_data(ctx);
+    read_config(ctx, TRUE);
+    flag_matching_presets(ctx);
+    create_tray_menu(ctx);
+}
+
 static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
 
     switch (umsg) {
@@ -505,7 +550,8 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
             fflush(stdout);
             populate_display_data(ctx);
             create_tray_menu(ctx);
-            // TODO: Reload config to check for applicable presets
+            // Reload config to check for applicable presets
+            reload(ctx);
             break;
 
         default:
@@ -587,34 +633,12 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     // TODO: Create config file if it does not exist
 
-    if (disp_config_read_file("disp.cfg", &app_context.config) != DISP_CONFIG_SUCCESS) {
-        wchar_t err_msg[1024] = {0};
-        StringCbPrintf((wchar_t *) &err_msg, 1024, L"Could not read configuration file:\n%s\n", disp_config_get_err_msg(&app_context.config));
-        MessageBox(NULL, (wchar_t *) err_msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+    if (read_config(&app_context, FALSE) != 0) {
         DestroyWindow(hwnd);
         return 1;
     }
 
-    display_preset_t **presets;
-    int preset_count = disp_config_get_presets(&app_context.config, &presets);
-
-    wprintf(L"Got %d presets\n", preset_count);
-
-    // TODO: Realloc, do not hardcode
-    int *match_indicies = calloc(10, sizeof(int));
-    int match_idx_count = 0;
-
-    for (int i = 0; i < preset_count; i++) {
-        display_preset_t *preset = presets[i];
-
-        if (disp_config_preset_matches_current(preset, &app_context) == DISP_CONFIG_SUCCESS) {
-            wprintf(L"Preset \"%s\" matches with the current monitor setup\n", preset->name);
-            preset->applicable = 1;
-            match_indicies[match_idx_count++] = i;
-        } else {
-            wprintf(L"Preset \"%s\" does not match with the current monitor setup\n", preset->name);
-        }
-    }
+    flag_matching_presets(&app_context);
 
     create_tray_menu(&app_context);
 

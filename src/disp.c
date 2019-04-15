@@ -344,8 +344,10 @@ static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LP
             switch (LOWORD(wparam)) {
                 case IDOK: ;
                     // User selected OK
-                    // Get name result pointer from the window
-                    wchar_t *res_name = (wchar_t *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
+                    // Get data pointer from the window
+                    preset_dialog_data_t *data = (preset_dialog_data_t *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
+                    // Get name pointer from the data struct
+                    wchar_t *res_name = (wchar_t *) &data->preset_name;
                     // Get name from the text field
                     if (GetDlgItemText(hwnd, IDC_PRESET_NAME, res_name, 64) == 0) {
                         // Failed
@@ -364,6 +366,9 @@ static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LP
                     // User selected cancel
                     wprintf(L"User selected Cancel\n");
                     fflush(stdout);
+                    // Get the data pointer and set the dialog to be canceled
+                    preset_dialog_data_t *dialog_data = (preset_dialog_data_t *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
+                    dialog_data->cancel = TRUE;
                     EndDialog(hwnd, wparam);
                     return TRUE;
             }
@@ -380,9 +385,16 @@ static void save_current_config(app_ctx_t *ctx) {
     // Create input dialog
     wprintf(L"Showing preset name dialog\n");
     fflush(stdout);
-    wchar_t preset_name[64] = {0};
-    DialogBoxParam(NULL, MAKEINTRESOURCE(IDD_DIALOG_PRESET_SAVE), ctx->main_window_hwnd, save_dialog_proc, (LPARAM) preset_name);
-    wprintf(L"Preset name dialog closed, selected name: \"%s\"\n", &preset_name);
+    preset_dialog_data_t data = {0};
+    //wchar_t preset_name[64] = {0};
+    DialogBoxParam(NULL, MAKEINTRESOURCE(IDD_DIALOG_PRESET_SAVE), ctx->main_window_hwnd, save_dialog_proc, (LPARAM) &data);
+    if (data.cancel == TRUE) {
+        // User canceled
+        wprintf(L"User canceled name input\n");
+        fflush(stdout);
+        return;
+    }
+    wprintf(L"Preset name dialog closed, selected name: \"%s\"\n", data.preset_name);
     fflush(stdout);
     // TODO: Add new preset to the app_config
 }

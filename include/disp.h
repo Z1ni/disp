@@ -33,4 +33,9 @@ typedef struct {
     int height;
 } virt_size_t;
 
+typedef struct {
+	wchar_t preset_name[64];
+	BOOL cancel;
+} preset_dialog_data_t;
+
 #endif

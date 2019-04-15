@@ -441,7 +441,26 @@ static void save_current_config(app_ctx_t *ctx) {
     }
     wprintf(L"Preset name dialog closed, selected name: \"%s\"\n", data.preset_name);
     fflush(stdout);
-    // TODO: Add new preset to the app_config
+    // Add new preset to the app_config
+    if (disp_config_create_preset(data.preset_name, ctx) != DISP_CONFIG_SUCCESS) {
+        // Failed
+        MessageBox(ctx->main_window_hwnd, L"Preset creation failed", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        return;
+    }
+    // Preset created, save
+    if (disp_config_save_file("disp.cfg", &(ctx->config)) != DISP_CONFIG_SUCCESS) {
+        // Failed
+        wchar_t err_msg[600] = {0};
+        StringCbPrintf((wchar_t *) err_msg, 600, L"Preset was created, but saving it failed:\n%s", disp_config_get_err_msg(&(ctx->config)));
+        MessageBox(ctx->main_window_hwnd, err_msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        // TODO: Handle better
+        PostQuitMessage(1);
+        return;
+    }
+    // Reload config etc.
+    reload(ctx);
+    // Save done, notify user
+    show_notification_message(ctx, L"Preset \"%s\" was saved", data.preset_name);
 }
 
 static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {

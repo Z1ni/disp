@@ -426,10 +426,8 @@ static void change_position_devmode(DEVMODE *devmode, int pos_x, int pos_y) {
     devmode->dmFields |= DM_POSITION;
 }
 
-static void apply_preset(app_ctx_t *ctx, display_preset_t *orig_preset) {
+static void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
     // For now we support changing display positions and orientations
-    // Copy preset because the pointer will invalidate on WM_DISPLAYCHANGE
-    // TODO: Maybe lock this so that WM_DISPLAYCHANGE won't refresh configuration if applying is in progress
 
     if (ctx->display_update_in_progress) {
         // TODO: What to do? Can't sleep because it will block the whole application
@@ -439,53 +437,32 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *orig_preset) {
         return;
     }
     ctx->display_update_in_progress = TRUE;
-    wprintf(L"Applying preset \"%s\"\n", orig_preset->name);
+    wprintf(L"Applying preset \"%s\"\n", preset->name);
     fflush(stdout);
 
-    // No need to copy the preset because the preset won't change
-    display_preset_t preset = {0};
-    preset.name = wcsdup(orig_preset->name);
-    preset.display_count = orig_preset->display_count;
-    preset.display_conf = calloc(preset.display_count, sizeof(display_settings_t *));
-    for (size_t i = 0; i < preset.display_count; i++) {
-        display_settings_t *settings_copy = calloc(1, sizeof(display_settings_t));
-        display_settings_t *preset_settings = orig_preset->display_conf[i];
-        settings_copy->device_path = wcsdup(preset_settings->device_path);
-        settings_copy->orientation = preset_settings->orientation;
-        settings_copy->pos_x = preset_settings->pos_x;
-        settings_copy->pos_y = preset_settings->pos_y;
-        settings_copy->width = preset_settings->width;
-        settings_copy->height = preset_settings->height;
-        preset.display_conf[i] = settings_copy;
-    }
-
     size_t success_count = 0;
-    for (size_t i = 0; i < preset.display_count; i++) {
-        display_settings_t *settings = preset.display_conf[i];
+    for (size_t i = 0; i < preset->display_count; i++) {
+        display_settings_t *settings = preset->display_conf[i];
 
         // Find the matching current monitor
         // TODO: Check that all the monitors match before applying so that we don't end up in a inconsistent state
-        monitor_t *match_monitor;
-        if (get_matching_monitor(ctx, settings->device_path, &match_monitor) != TRUE) {
+        monitor_t *monitor;
+        if (get_matching_monitor(ctx, settings->device_path, &monitor) != TRUE) {
             // No matching monitor (this shouldn't happen as we check the monitors on WM_DISPLAYCHANGE)
             MessageBox(ctx->main_window_hwnd, L"Failed to apply preset: no matching monitor", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
             ctx->display_update_in_progress = FALSE;
             return;
         }
-        // Copy the matching monitor_t
-        monitor_t monitor = {0};
-        memcpy(&monitor, match_monitor, sizeof(monitor_t));
-
         // monitor now contains the matching monitor_t
         // Copy base DEVMODE from the monitor
         DEVMODE tmp = {0};
-        memcpy(&tmp, &(monitor.devmode), sizeof(DEVMODE));
+        memcpy(&tmp, &(monitor->devmode), sizeof(DEVMODE));
         // Make the needed devmode changes to change the orientation (if needed)
         change_orientation_devmode(&tmp, settings->orientation);
         // Make the needed position changes
         change_position_devmode(&tmp, settings->pos_x, settings->pos_y);
         // Apply the devmode
-        LONG ret = ChangeDisplaySettingsEx(monitor.name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
+        LONG ret = ChangeDisplaySettingsEx(monitor->name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
         if (ret != DISP_CHANGE_SUCCESSFUL) {
             wprintf(L"Display change failed: 0x%04X\n", ret);
         } else {
@@ -495,24 +472,15 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *orig_preset) {
         fflush(stdout);
     }
 
-    if (success_count == preset.display_count) {
+    if (success_count == preset->display_count) {
         // Show a notification
-        show_notification_message(ctx, L"Changed display preset to \"%s\"", preset.name);
+        show_notification_message(ctx, L"Changed display preset to \"%s\"", preset->name);
         // TODO: Auto-revert period?
     } else {
         // One or more changes failed
-        show_notification_message(ctx, L"Failed to change display preset to \"%s\"", preset.name);
+        show_notification_message(ctx, L"Failed to change display preset to \"%s\"", preset->name);
         // TODO: Try to revert?
     }
-
-    // Free the copied preset
-    // TODO: Extract function
-    free((wchar_t *) preset.name);
-    for (size_t i = 0; i < preset.display_count; i++) {
-        free((wchar_t *) preset.display_conf[i]->device_path);
-        free(preset.display_conf[i]);
-    }
-    free(preset.display_conf);
 
     // Reload display info
     populate_display_data(ctx);

@@ -9,6 +9,7 @@ typedef struct {
 	HMENU notif_menu;
 	GUID notify_guid;
 	HWND main_window_hwnd;
+	BOOL display_update_in_progress;
 	size_t monitor_count;
 	monitor_t *monitors;
 } app_ctx_t;

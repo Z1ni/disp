@@ -430,6 +430,19 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *orig_preset) {
     // For now we support changing display positions and orientations
     // Copy preset because the pointer will invalidate on WM_DISPLAYCHANGE
     // TODO: Maybe lock this so that WM_DISPLAYCHANGE won't refresh configuration if applying is in progress
+
+    if (ctx->display_update_in_progress) {
+        // TODO: What to do? Can't sleep because it will block the whole application
+        // Just give up for now
+        wprintf(L"Display update already in progress, can't change settings\n");
+        fflush(stdout);
+        return;
+    }
+    ctx->display_update_in_progress = TRUE;
+    wprintf(L"Applying preset \"%s\"\n", orig_preset->name);
+    fflush(stdout);
+
+    // No need to copy the preset because the preset won't change
     display_preset_t preset = {0};
     preset.name = wcsdup(orig_preset->name);
     preset.display_count = orig_preset->display_count;
@@ -451,10 +464,12 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *orig_preset) {
         display_settings_t *settings = preset.display_conf[i];
 
         // Find the matching current monitor
+        // TODO: Check that all the monitors match before applying so that we don't end up in a inconsistent state
         monitor_t *match_monitor;
         if (get_matching_monitor(ctx, settings->device_path, &match_monitor) != TRUE) {
             // No matching monitor (this shouldn't happen as we check the monitors on WM_DISPLAYCHANGE)
             MessageBox(ctx->main_window_hwnd, L"Failed to apply preset: no matching monitor", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+            ctx->display_update_in_progress = FALSE;
             return;
         }
         // Copy the matching monitor_t
@@ -498,6 +513,18 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *orig_preset) {
         free(preset.display_conf[i]);
     }
     free(preset.display_conf);
+
+    // Reload display info
+    populate_display_data(ctx);
+    create_tray_menu(ctx);
+    // Reload config to check for applicable presets
+    reload(ctx);
+
+    // All done
+    ctx->display_update_in_progress = FALSE;
+
+    wprintf(L"apply_preset complete\n");
+    fflush(stdout);
 }
 
 static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
@@ -691,11 +718,20 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
         case WM_DISPLAYCHANGE: ;
             // Display settings have changed
             wprintf(L"WM_DISPLAYCHANGE: Display settings have changed\n");
+            if (ctx->display_update_in_progress) {
+                // Display update in progress
+                wprintf(L"Display update in progress, not reloading\n");
+                fflush(stdout);
+                break;
+            }
+            wprintf(L"Reloading information and config\n");
             fflush(stdout);
+            ctx->display_update_in_progress = TRUE;
             populate_display_data(ctx);
             create_tray_menu(ctx);
             // Reload config to check for applicable presets
             reload(ctx);
+            ctx->display_update_in_progress = FALSE;
             break;
 
         default:
@@ -712,6 +748,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     fflush(stdout);
 
     app_ctx_t app_context = {0};
+    app_context.display_update_in_progress = FALSE;
 
     WNDCLASSEX wcex = {0};
     wcex.cbSize = sizeof(WNDCLASSEX);

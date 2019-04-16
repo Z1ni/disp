@@ -218,6 +218,7 @@ static void create_tray_menu(app_ctx_t *ctx) {
     AppendMenu(notif_menu_config, MF_SEPARATOR, 0, NULL);
 
     // TODO: Limit listed configurations? Scrollable menu?
+    // TODO: Detect applied preset (even if the settings change wasn't done by this application)
 
     display_preset_t **presets;
     int preset_count = disp_config_get_presets(&ctx->config, &presets);
@@ -375,6 +376,128 @@ static void reload(app_ctx_t *ctx) {
     read_config(ctx, TRUE);
     flag_matching_presets(ctx);
     create_tray_menu(ctx);
+}
+
+static BOOL get_matching_monitor(app_ctx_t *ctx, const wchar_t *device_id, monitor_t **monitor_out) {
+    for (size_t i = 0; i < ctx->monitor_count; i++) {
+        monitor_t *monitor = &(ctx->monitors[i]);
+        // Compare paths
+        if (wcscmp((wchar_t *) monitor->device_id, device_id) == 0) {
+            // Found
+            *monitor_out = monitor;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+// TODO: Use this when changing the display orientation from the tray menu
+static void change_orientation_devmode(DEVMODE *devmode, int orientation) {
+    if ((int) devmode->dmDisplayOrientation == orientation) {
+        // No change
+        return;
+    }
+
+    devmode->dmDisplayOrientation = orientation;
+    devmode->dmFields |= DM_DISPLAYORIENTATION;
+    // Check if we should swap dmPelsHeight and dmPelsWidth (if the change is 90 degrees)
+    int diff = abs(orientation - devmode->dmDisplayOrientation) % 3;
+    if (diff < 2) {
+        // 90 degree change, swap dmPelsHeight and dmPelsWidth
+        int tempPelsHeight = devmode->dmPelsHeight;
+        devmode->dmPelsHeight = devmode->dmPelsWidth;
+        devmode->dmPelsWidth = tempPelsHeight;
+        devmode->dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT;
+    } else {
+        // 180 degree change, don't swap
+        wprintf(L"180 degree change, no need to swap dmPelsHeight and dmPelsWidth\n");
+        fflush(stdout);
+    }
+}
+
+static void change_position_devmode(DEVMODE *devmode, int pos_x, int pos_y) {
+    if (devmode->dmPosition.x == pos_x && devmode->dmPosition.y == pos_y) {
+        // No change
+        return;
+    }
+
+    devmode->dmPosition.x = pos_x;
+    devmode->dmPosition.y = pos_y;
+    devmode->dmFields |= DM_POSITION;
+}
+
+static void apply_preset(app_ctx_t *ctx, display_preset_t *orig_preset) {
+    // For now we support changing display positions and orientations
+    // Copy preset because the pointer will invalidate on WM_DISPLAYCHANGE
+    // TODO: Maybe lock this so that WM_DISPLAYCHANGE won't refresh configuration if applying is in progress
+    display_preset_t preset = {0};
+    preset.name = wcsdup(orig_preset->name);
+    preset.display_count = orig_preset->display_count;
+    preset.display_conf = calloc(preset.display_count, sizeof(display_settings_t *));
+    for (size_t i = 0; i < preset.display_count; i++) {
+        display_settings_t *settings_copy = calloc(1, sizeof(display_settings_t));
+        display_settings_t *preset_settings = orig_preset->display_conf[i];
+        settings_copy->device_path = wcsdup(preset_settings->device_path);
+        settings_copy->orientation = preset_settings->orientation;
+        settings_copy->pos_x = preset_settings->pos_x;
+        settings_copy->pos_y = preset_settings->pos_y;
+        settings_copy->width = preset_settings->width;
+        settings_copy->height = preset_settings->height;
+        preset.display_conf[i] = settings_copy;
+    }
+
+    size_t success_count = 0;
+    for (size_t i = 0; i < preset.display_count; i++) {
+        display_settings_t *settings = preset.display_conf[i];
+
+        // Find the matching current monitor
+        monitor_t *match_monitor;
+        if (get_matching_monitor(ctx, settings->device_path, &match_monitor) != TRUE) {
+            // No matching monitor (this shouldn't happen as we check the monitors on WM_DISPLAYCHANGE)
+            MessageBox(ctx->main_window_hwnd, L"Failed to apply preset: no matching monitor", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+            return;
+        }
+        // Copy the matching monitor_t
+        monitor_t monitor = {0};
+        memcpy(&monitor, match_monitor, sizeof(monitor_t));
+
+        // monitor now contains the matching monitor_t
+        // Copy base DEVMODE from the monitor
+        DEVMODE tmp = {0};
+        memcpy(&tmp, &(monitor.devmode), sizeof(DEVMODE));
+        // Make the needed devmode changes to change the orientation (if needed)
+        change_orientation_devmode(&tmp, settings->orientation);
+        // Make the needed position changes
+        change_position_devmode(&tmp, settings->pos_x, settings->pos_y);
+        // Apply the devmode
+        LONG ret = ChangeDisplaySettingsEx(monitor.name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
+        if (ret != DISP_CHANGE_SUCCESSFUL) {
+            wprintf(L"Display change failed: 0x%04X\n", ret);
+        } else {
+            wprintf(L"Display change was successful\n");
+            success_count++;
+        }
+        fflush(stdout);
+    }
+
+    if (success_count == preset.display_count) {
+        // Show a notification
+        show_notification_message(ctx, L"Changed display preset to \"%s\"", preset.name);
+        // TODO: Auto-revert period?
+    } else {
+        // One or more changes failed
+        show_notification_message(ctx, L"Failed to change display preset to \"%s\"", preset.name);
+        // TODO: Try to revert?
+    }
+
+    // Free the copied preset
+    // TODO: Extract function
+    free((wchar_t *) preset.name);
+    for (size_t i = 0; i < preset.display_count; i++) {
+        free((wchar_t *) preset.display_conf[i]->device_path);
+        free(preset.display_conf[i]);
+    }
+    free(preset.display_conf);
 }
 
 static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
@@ -556,9 +679,11 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
             if ((NOTIF_MENU_CONFIG_SELECT & selection) == NOTIF_MENU_CONFIG_SELECT) {
                 // Config selected
                 int config_idx = selection & NOTIF_MENU_CONFIG_INDEX;
-                wprintf(L"User wants to apply preset %d (\"%s\")\n", config_idx, ctx->config.presets[config_idx]->name);
+                display_preset_t *preset = ctx->config.presets[config_idx];
+                wprintf(L"User wants to apply preset %d (\"%s\")\n", config_idx, preset->name);
                 fflush(stdout);
-                // TODO: Apply preset
+                // Apply preset
+                apply_preset(ctx, preset);
             }
 
             break;

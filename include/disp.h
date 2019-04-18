@@ -9,7 +9,7 @@
 #define APP_NAME L"disp"
 #define APP_VER L"0.1.0"
 
-#define MSG_NOTIFYICON (WM_APP+1)
+#define MSG_NOTIFYICON (WM_APP + 1)
 #define NOTIF_MENU_EXIT 1
 #define NOTIF_MENU_ABOUT_DISPLAYS 2
 #define NOTIF_MENU_CONFIG_SAVE 3
@@ -34,8 +34,8 @@ typedef struct {
 } virt_size_t;
 
 typedef struct {
-	wchar_t preset_name[64];
-	BOOL cancel;
+    wchar_t preset_name[64];
+    BOOL cancel;
 } preset_dialog_data_t;
 
 #endif

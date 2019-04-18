@@ -124,7 +124,6 @@ int disp_config_read_file(const char *path, app_config_t *app_config) {
         config_setting_t *elem = config_setting_get_elem(disp_presets, i);
 
         // Name
-        //preset_entry->name = wcsdup(L"Dummy");
         const char *name;
         config_setting_lookup_string(elem, "name", &name);
         preset_entry->name = mbstowcsdup(name, NULL);
@@ -191,7 +190,7 @@ int disp_config_save_file(const char *path, app_config_t *app_config) {
     // Add presets
     for (size_t i = 0; i < app_config->preset_count; i++) {
         config_setting_t *preset_entry = config_setting_add(presets_list, NULL, CONFIG_TYPE_GROUP);
-        
+
         // Name
         const char *name_str = wcstombs_alloc(app_config->presets[i]->name, NULL);
 
@@ -239,7 +238,6 @@ int disp_config_save_file(const char *path, app_config_t *app_config) {
             setting = config_setting_add(resolution, "height", CONFIG_TYPE_INT);
             config_setting_set_int(setting, disp_settings->height);
         }
-
     }
 
     if (config_write_file(&config, path) == CONFIG_FALSE) {
@@ -253,7 +251,7 @@ int disp_config_save_file(const char *path, app_config_t *app_config) {
 }
 
 wchar_t *disp_config_get_err_msg(const app_config_t *config) {
-    return (wchar_t *)config->error_str;
+    return (wchar_t *) config->error_str;
 }
 
 int disp_config_get_presets(const app_config_t *config, display_preset_t ***presets) {
@@ -350,7 +348,7 @@ void disp_config_destroy(app_config_t *config) {
                 }
                 free(preset->display_conf);
             }
-            free((wchar_t *)preset->name);
+            free((wchar_t *) preset->name);
             free(preset);
         }
         free(config->presets);

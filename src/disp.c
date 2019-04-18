@@ -31,7 +31,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Commctrl.h>
 #include <Strsafe.h>
 #include <shellapi.h>
-#include <Objbase.h>    // This can be removed if the notification GUID is hardcoded
+#include <Objbase.h> // This can be removed if the notification GUID is hardcoded
 
 #include "disp.h"
 #include "config.h"
@@ -49,10 +49,8 @@ static void free_monitors(app_ctx_t *ctx) {
 static BOOL CALLBACK monitor_enum_proc(HMONITOR mon, HDC hdc_mon, LPRECT lprc_mon, LPARAM dw_data) {
     app_ctx_t *ctx = (app_ctx_t *) dw_data;
 
-    MONITORINFOEX info = {
-        .cbSize = sizeof(MONITORINFOEX)
-    };
-    GetMonitorInfo(mon, (LPMONITORINFO)&info);
+    MONITORINFOEX info = {.cbSize = sizeof(MONITORINFOEX)};
+    GetMonitorInfo(mon, (LPMONITORINFO) &info);
 
     StringCchCopy(ctx->monitors[ctx->monitor_count].name, CCHDEVICENAME, info.szDevice);
     ctx->monitors[ctx->monitor_count].rect = info.rcMonitor;
@@ -113,7 +111,7 @@ static void populate_display_data(app_ctx_t *ctx) {
             if (wcscmp(ctx->monitors[i].name, dd.DeviceName) != 0) {
                 continue;
             }
-            monitor_idx = (int)i;
+            monitor_idx = (int) i;
         }
         if (monitor_idx == -1) {
             // No corresponding monitor, skip
@@ -149,8 +147,10 @@ static void populate_display_data(app_ctx_t *ctx) {
     }
 
     // Allocate memory
-    DISPLAYCONFIG_PATH_INFO *display_paths = (DISPLAYCONFIG_PATH_INFO *) calloc((int)num_of_paths, sizeof(DISPLAYCONFIG_PATH_INFO));
-    DISPLAYCONFIG_MODE_INFO *display_modes = (DISPLAYCONFIG_MODE_INFO *) calloc((int)num_of_modes, sizeof(DISPLAYCONFIG_MODE_INFO));
+    DISPLAYCONFIG_PATH_INFO *display_paths =
+        (DISPLAYCONFIG_PATH_INFO *) calloc((int) num_of_paths, sizeof(DISPLAYCONFIG_PATH_INFO));
+    DISPLAYCONFIG_MODE_INFO *display_modes =
+        (DISPLAYCONFIG_MODE_INFO *) calloc((int) num_of_modes, sizeof(DISPLAYCONFIG_MODE_INFO));
 
     // Query information
     ret = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &num_of_paths, display_paths, &num_of_modes, display_modes, NULL);
@@ -174,7 +174,7 @@ static void populate_display_data(app_ctx_t *ctx) {
         header.id = display_modes[o].id;
         header.adapterId = display_modes[o].adapterId;
         device_name.header = header;
-        ret = DisplayConfigGetDeviceInfo((DISPLAYCONFIG_DEVICE_INFO_HEADER *)&device_name);
+        ret = DisplayConfigGetDeviceInfo((DISPLAYCONFIG_DEVICE_INFO_HEADER *) &device_name);
         if (ret != ERROR_SUCCESS) {
             wprintf(L"DisplayConfigGetDeviceInfo failed: 0x%04X\n", ret);
             free(display_paths);
@@ -245,20 +245,21 @@ static void create_tray_menu(app_ctx_t *ctx) {
         for (size_t a = 0; a < 4; a++) {
             // The monitor index is ORred with the constant
             UINT itemId = NOTIF_MENU_MONITOR_ORIENTATION_SELECT | i | (a << 10);
-            AppendMenu(mon_orient_menu_conf, (mon.devmode.dmDisplayOrientation == a ? MF_CHECKED : 0), itemId, orientation_str[a]);
+            AppendMenu(mon_orient_menu_conf, (mon.devmode.dmDisplayOrientation == a ? MF_CHECKED : 0), itemId,
+                       orientation_str[a]);
         }
         // Create submenu for this monitor
         HMENU mon_sub_menu_conf = CreatePopupMenu();
-        AppendMenu(mon_sub_menu_conf, MF_POPUP, (UINT_PTR)mon_orient_menu_conf, L"Orientation");
+        AppendMenu(mon_sub_menu_conf, MF_POPUP, (UINT_PTR) mon_orient_menu_conf, L"Orientation");
         // Create menu entry for this monitor
         wchar_t entStr[100];
         StringCbPrintf(entStr, 100, L"%s (%s)", mon.friendly_name, orientation_str[mon.devmode.dmDisplayOrientation]);
-        AppendMenu(ctx->notif_menu, MF_POPUP, (UINT_PTR)mon_sub_menu_conf, entStr);
+        AppendMenu(ctx->notif_menu, MF_POPUP, (UINT_PTR) mon_sub_menu_conf, entStr);
     }
 
     AppendMenu(ctx->notif_menu, MF_SEPARATOR, 0, NULL);
     AppendMenu(ctx->notif_menu, 0, NOTIF_MENU_ABOUT_DISPLAYS, L"About displays");
-    AppendMenu(ctx->notif_menu, MF_POPUP, (UINT_PTR)notif_menu_config, L"Config");
+    AppendMenu(ctx->notif_menu, MF_POPUP, (UINT_PTR) notif_menu_config, L"Config");
     AppendMenu(ctx->notif_menu, MF_SEPARATOR, 0, NULL);
 
     AppendMenu(ctx->notif_menu, 0, NOTIF_MENU_EXIT, L"Exit");
@@ -326,7 +327,8 @@ static BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orie
         wprintf(L"Display change was successful\n");
         // Show a notification
         // TODO: Don't use friendly name as it isn't always available
-        show_notification_message(ctx, L"Changed display %s orientation to %s", temp_mon.friendly_name, orientation_str[orientation]);
+        show_notification_message(ctx, L"Changed display %s orientation to %s", temp_mon.friendly_name,
+                                  orientation_str[orientation]);
     }
     fflush(stdout);
 
@@ -344,7 +346,8 @@ static int read_config(app_ctx_t *ctx, BOOL reload) {
     fflush(stdout);
     if (disp_config_read_file("disp.cfg", &(ctx->config)) != DISP_CONFIG_SUCCESS) {
         wchar_t err_msg[1024] = {0};
-        StringCbPrintf((wchar_t *) &err_msg, 1024, L"Could not read configuration file:\n%s\n", disp_config_get_err_msg(&(ctx->config)));
+        StringCbPrintf((wchar_t *) &err_msg, 1024, L"Could not read configuration file:\n%s\n",
+                       disp_config_get_err_msg(&(ctx->config)));
         MessageBox(NULL, (wchar_t *) err_msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return 1;
     }
@@ -449,7 +452,8 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
         monitor_t *monitor;
         if (get_matching_monitor(ctx, settings->device_path, &monitor) != TRUE) {
             // No matching monitor (this shouldn't happen as we check the monitors on WM_DISPLAYCHANGE)
-            MessageBox(ctx->main_window_hwnd, L"Failed to apply preset: no matching monitor", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+            MessageBox(ctx->main_window_hwnd, L"Failed to apply preset: no matching monitor", APP_NAME,
+                       MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
             ctx->display_update_in_progress = FALSE;
             return;
         }
@@ -498,14 +502,14 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
 static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
 
     switch (umsg) {
-        case WM_INITDIALOG: ;
+        case WM_INITDIALOG:;
             // Set the name pointer from the init message
             SetWindowLongPtr(hwnd, GWLP_USERDATA, lparam);
             break;
 
         case WM_COMMAND:
             switch (LOWORD(wparam)) {
-                case IDOK: ;
+                case IDOK:;
                     // User selected OK
                     // Get data pointer from the window
                     preset_dialog_data_t *data = (preset_dialog_data_t *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
@@ -515,7 +519,8 @@ static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LP
                     if (GetDlgItemText(hwnd, IDC_PRESET_NAME, res_name, 64) == 0) {
                         // Failed
                         wchar_t msg[100] = {0};
-                        StringCbPrintf((wchar_t *) msg, 100, L"Failed to get dialog name string: 0x%08X", GetLastError());
+                        StringCbPrintf((wchar_t *) msg, 100, L"Failed to get dialog name string: 0x%08X",
+                                       GetLastError());
                         MessageBox(hwnd, msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
                         EndDialog(hwnd, wparam);
                         return TRUE;
@@ -525,7 +530,7 @@ static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LP
                     fflush(stdout);
                     EndDialog(hwnd, wparam);
                     return TRUE;
-                case IDCANCEL: ;
+                case IDCANCEL:;
                     // User selected cancel
                     wprintf(L"User selected Cancel\n");
                     fflush(stdout);
@@ -549,8 +554,9 @@ static void save_current_config(app_ctx_t *ctx) {
     wprintf(L"Showing preset name dialog\n");
     fflush(stdout);
     preset_dialog_data_t data = {0};
-    //wchar_t preset_name[64] = {0};
-    DialogBoxParam(NULL, MAKEINTRESOURCE(IDD_DIALOG_PRESET_SAVE), ctx->main_window_hwnd, save_dialog_proc, (LPARAM) &data);
+    // wchar_t preset_name[64] = {0};
+    DialogBoxParam(NULL, MAKEINTRESOURCE(IDD_DIALOG_PRESET_SAVE), ctx->main_window_hwnd, save_dialog_proc,
+                   (LPARAM) &data);
     if (data.cancel == TRUE) {
         // User canceled
         wprintf(L"User canceled name input\n");
@@ -569,7 +575,8 @@ static void save_current_config(app_ctx_t *ctx) {
     if (disp_config_save_file("disp.cfg", &(ctx->config)) != DISP_CONFIG_SUCCESS) {
         // Failed
         wchar_t err_msg[600] = {0};
-        StringCbPrintf((wchar_t *) err_msg, 600, L"Preset was created, but saving it failed:\n%s", disp_config_get_err_msg(&(ctx->config)));
+        StringCbPrintf((wchar_t *) err_msg, 600, L"Preset was created, but saving it failed:\n%s",
+                       disp_config_get_err_msg(&(ctx->config)));
         MessageBox(ctx->main_window_hwnd, err_msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         // TODO: Handle better
         PostQuitMessage(1);
@@ -587,7 +594,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
     app_ctx_t *ctx = (app_ctx_t *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
 
     switch (umsg) {
-        case WM_DESTROY: ;
+        case WM_DESTROY:;
             wprintf(L"Shutting down\n");
             NOTIFYICONDATA nid = {0};
             nid.cbSize = sizeof(NOTIFYICONDATA);
@@ -602,9 +609,9 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
             PostQuitMessage(0);
             break;
 
-        case MSG_NOTIFYICON: ;
+        case MSG_NOTIFYICON:;
             switch (LOWORD(lparam)) {
-                case WM_CONTEXTMENU: ;
+                case WM_CONTEXTMENU:;
                     // Tray icon was right clicked
                     int menu_x = GET_X_LPARAM(wparam);
                     int menu_y = GET_Y_LPARAM(wparam);
@@ -614,13 +621,13 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
                     if (!TrackPopupMenuEx(ctx->notif_menu, 0, menu_x, menu_y, hwnd, NULL)) {
                         wchar_t err_str[100];
                         StringCbPrintf(err_str, 100, L"TrackPopupMenuEx failed: %ld", GetLastError());
-                        MessageBoxW(hwnd, (LPCWSTR)err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+                        MessageBoxW(hwnd, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
                     }
                     break;
             }
-            break;  
+            break;
 
-        case WM_COMMAND: ;
+        case WM_COMMAND:;
             // User did something with controls
             if (HIWORD(wparam) != 0) {
                 break;
@@ -630,31 +637,35 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
             wprintf(L"User selected: 0x%04X\n", selection);
             fflush(stdout);
             switch (selection) {
-                case NOTIF_MENU_EXIT: ;
+                case NOTIF_MENU_EXIT:;
                     // Exit item selected
                     DestroyWindow(hwnd);
                     break;
 
-                case NOTIF_MENU_ABOUT_DISPLAYS: ;
+                case NOTIF_MENU_ABOUT_DISPLAYS:;
                     // About displays
                     wchar_t about_str[2048];
                     LPTSTR end;
                     size_t rem;
                     StringCbPrintfEx(about_str, 2048, &end, &rem, 0, L"Display information:\n\n");
                     StringCbPrintfEx(end, rem, &end, &rem, 0, L"Display count: %d\n", ctx->monitor_count);
-                    StringCbPrintfEx(end, rem, &end, &rem, 0, L"Virtual resolution: %ldx%ld\n", ctx->display_virtual_size.width, ctx->display_virtual_size.height);
+                    StringCbPrintfEx(end, rem, &end, &rem, 0, L"Virtual resolution: %ldx%ld\n",
+                                     ctx->display_virtual_size.width, ctx->display_virtual_size.height);
                     for (size_t i = 0; i < ctx->monitor_count; i++) {
                         monitor_t mon = ctx->monitors[i];
                         StringCbPrintfEx(end, rem, &end, &rem, 0, L"%s (%s):\n", mon.friendly_name, mon.name);
                         StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Device ID: %s\n", mon.device_id);
-                        StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Resolution: %ldx%ld\n", mon.rect.right-mon.rect.left, mon.rect.bottom-mon.rect.top);
-                        StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Orientation: %s\n", orientation_str[mon.devmode.dmDisplayOrientation]);
-                        StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Virtual position: %ld, %ld\n", mon.virt_pos.x, mon.virt_pos.y);
+                        StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Resolution: %ldx%ld\n",
+                                         mon.rect.right - mon.rect.left, mon.rect.bottom - mon.rect.top);
+                        StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Orientation: %s\n",
+                                         orientation_str[mon.devmode.dmDisplayOrientation]);
+                        StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Virtual position: %ld, %ld\n", mon.virt_pos.x,
+                                         mon.virt_pos.y);
                     }
                     MessageBox(hwnd, about_str, APP_NAME, MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
                     break;
 
-                case NOTIF_MENU_CONFIG_SAVE: ;
+                case NOTIF_MENU_CONFIG_SAVE:;
                     // Save current config
                     save_current_config(ctx);
                     break;
@@ -683,7 +694,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 
             break;
 
-        case WM_DISPLAYCHANGE: ;
+        case WM_DISPLAYCHANGE:;
             // Display settings have changed
             wprintf(L"WM_DISPLAYCHANGE: Display settings have changed\n");
             if (ctx->display_update_in_progress) {
@@ -725,23 +736,24 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     wcex.hInstance = h_inst;
     wcex.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wcex.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+    wcex.hbrBackground = (HBRUSH) GetStockObject(WHITE_BRUSH);
     wcex.lpszClassName = L"WinClass";
 
     if (!RegisterClassEx(&wcex)) {
         int err = GetLastError();
         wchar_t err_str[100];
         StringCbPrintf(err_str, 100, L"RegisterClassEx failed: %ld", err);
-        MessageBox(NULL, (LPCWSTR)err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return 1;
     }
 
-    HWND hwnd = CreateWindowW(L"WinClass", APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 500, 100, NULL, NULL, h_inst, NULL);
+    HWND hwnd = CreateWindowW(L"WinClass", APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 500, 100, NULL,
+                              NULL, h_inst, NULL);
     if (!hwnd) {
         int err = GetLastError();
         wchar_t err_str[100];
         StringCbPrintf(err_str, 100, L"CreateWindowW failed: %ld", err);
-        MessageBox(NULL, (LPCWSTR)err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return 1;
     }
     // Set app context as the window user data so the window procedure can access the context without global variables
@@ -751,7 +763,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     //    not take effect until you call the SetWindowPos function."
     SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
 
-    //ShowWindow(hwnd, n_show_cmd);
+    // ShowWindow(hwnd, n_show_cmd);
     UpdateWindow(hwnd);
 
     app_context.main_window_hwnd = hwnd;
@@ -809,5 +821,5 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     free_monitors(&app_context);
     disp_config_destroy(&app_context.config);
 
-    return (int)msg.wParam;
+    return (int) msg.wParam;
 }

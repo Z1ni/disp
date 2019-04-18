@@ -2,3 +2,4 @@ obj/
 bin/
 disp.cfg
 *.res
+.vscode/

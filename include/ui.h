@@ -16,21 +16,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef _DISP_H_
-#define _DISP_H_
+#ifndef _UI_H_
+#define _UI_H_
 
-#define _UNICODE
-#define UNICODE
+#include <strsafe.h>
+#include "context.h"
 
-#include "app.h"
+typedef struct {
+    wchar_t preset_name[64];
+    BOOL cancel;
+} preset_dialog_data_t;
 
-void free_monitors(app_ctx_t *ctx);
-void populate_display_data(app_ctx_t *ctx);
-BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orientation);
-int read_config(app_ctx_t *ctx, BOOL reload);
-void flag_matching_presets(app_ctx_t *ctx);
-void reload(app_ctx_t *ctx);
-void apply_preset(app_ctx_t *ctx, display_preset_t *preset);
-void save_current_config(app_ctx_t *ctx);
+void create_tray_menu(app_ctx_t *ctx);
+void show_notification_message(app_ctx_t *ctx, STRSAFE_LPCWSTR format, ...);
+void show_save_dialog(app_ctx_t *ctx, preset_dialog_data_t *data);
+HWND init_main_window(app_ctx_t *ctx, HINSTANCE h_inst);
+int create_tray_icon(app_ctx_t *ctx, HWND hwnd);
 
 #endif

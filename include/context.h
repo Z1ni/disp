@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef _CONTEXT_H_
 #define _CONTEXT_H_
 
-#include "disp.h"
+#include "app.h"
 
 typedef struct {
     app_config_t config;

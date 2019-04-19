@@ -114,7 +114,7 @@ static void populate_display_data(app_ctx_t *ctx) {
         }
         if (monitor_idx == -1) {
             // No corresponding monitor, skip
-            wprintf(L"No monitor with name of %s\n", dd.DeviceName);
+            log_debug(L"No monitor with name of %s", dd.DeviceName);
             ZeroMemory(&dd, sizeof(DISPLAY_DEVICE));
             dd.cb = sizeof(DISPLAY_DEVICE);
             dev++;
@@ -141,7 +141,7 @@ static void populate_display_data(app_ctx_t *ctx) {
     UINT32 num_of_modes;
     LONG ret = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &num_of_paths, &num_of_modes);
     if (ret != ERROR_SUCCESS) {
-        wprintf(L"GetDisplayConfigBufferSizes failed: 0x%04X\n", ret);
+        log_error(L"GetDisplayConfigBufferSizes failed: 0x%04X", ret);
         return;
     }
 
@@ -154,7 +154,7 @@ static void populate_display_data(app_ctx_t *ctx) {
     // Query information
     ret = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &num_of_paths, display_paths, &num_of_modes, display_modes, NULL);
     if (ret != ERROR_SUCCESS) {
-        wprintf(L"QueryDisplayConfig failed: 0x%04X\n", ret);
+        log_error(L"QueryDisplayConfig failed: 0x%04X\n", ret);
         free(display_paths);
         free(display_modes);
         return;
@@ -175,7 +175,7 @@ static void populate_display_data(app_ctx_t *ctx) {
         device_name.header = header;
         ret = DisplayConfigGetDeviceInfo((DISPLAYCONFIG_DEVICE_INFO_HEADER *) &device_name);
         if (ret != ERROR_SUCCESS) {
-            wprintf(L"DisplayConfigGetDeviceInfo failed: 0x%04X\n", ret);
+            log_error(L"DisplayConfigGetDeviceInfo failed: 0x%04X\n", ret);
             free(display_paths);
             free(display_modes);
             return;
@@ -192,7 +192,7 @@ static void populate_display_data(app_ctx_t *ctx) {
             break;
         }
         if (!found_monitor) {
-            wprintf(L"No corresponding monitor entry for %s\n", device_name.monitorDevicePath);
+            log_debug(L"No corresponding monitor entry for %s\n", device_name.monitorDevicePath);
         }
     }
 

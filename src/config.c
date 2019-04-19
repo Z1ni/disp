@@ -22,13 +22,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Windows.h>
 #include <Strsafe.h>
 #include "config.h"
+#include "log.h"
 
 static wchar_t *mbstowcsdup(const char *src, size_t *dest_sz) {
     int wbuf_size = mbstowcs(NULL, src, 0);
     if (wbuf_size < 0) {
-        // wfprintf to stderr?
         // TODO: Return NULL instead?
-        wprintf(L"wbuf_size query failed\n");
+        log_error(L"wbuf_size query failed");
         abort();
     }
     // Allocate memory
@@ -37,7 +37,7 @@ static wchar_t *mbstowcsdup(const char *src, size_t *dest_sz) {
     tmp = calloc(wbuf_size + 1, sizeof(wchar_t));
     if (mbstowcs(tmp, src, wbuf_size + 1) <= 0) {
         // TODO: Return NULL instead?
-        wprintf(L"mbstowcs failed\n");
+        log_error(L"mbstowcs failed");
         abort();
     }
     if (dest_sz != NULL) {
@@ -53,7 +53,7 @@ static const char *wcstombs_alloc(const wchar_t *src, size_t *dest_sz) {
     size_t result_sz = (src_sz * sizeof(char)) * 2; // Each multibyte character is two bytes
     char *result = calloc(src_sz, result_sz);
     if (wcstombs_s(&converted_count, result, result_sz, src, _TRUNCATE) != 0) {
-        fwprintf(stderr, L"wcstombs_s failed: 0x%04X\n", errno);
+        log_error(L"wcstombs_s failed: 0x%04X", errno);
         abort();
     }
     if (dest_sz != NULL) {
@@ -100,8 +100,7 @@ static void set_error_info(app_config_t *app_config, const config_t *libconfig_c
     memcpy(app_config->error_str, combined_err_str, 512);
 
     // Log
-    fwprintf(stderr, L"libconfig error: %s\n", combined_err_str);
-    fflush(stderr);
+    log_error(L"libconfig error: %s", combined_err_str);
 }
 
 int disp_config_read_file(const char *path, app_config_t *app_config) {
@@ -344,7 +343,7 @@ int disp_config_create_preset(const wchar_t *name, app_ctx_t *ctx) {
     void *realloc_ptr = realloc(config->presets, (config->preset_count + 1) * sizeof(display_preset_t *));
     if (realloc_ptr == NULL) {
         // Realloc failed
-        fwprintf(stderr, L"realloc failed\n");
+        log_error(L"realloc failed");
         abort();
     }
     config->presets = realloc_ptr;

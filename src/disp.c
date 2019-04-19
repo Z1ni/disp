@@ -36,10 +36,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "disp.h"
 #include "config.h"
 #include "resource.h"
+#include "log.h"
 
 LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
-
-// TODO: Implement proper logging
 
 static void free_monitors(app_ctx_t *ctx) {
     free(ctx->monitors);
@@ -315,22 +314,20 @@ static BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orie
         tmp.dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT;
     } else {
         // 180 degree change, don't swap
-        wprintf(L"180 degree change, no need to swap dmPelsHeight and dmPelsWidth\n");
-        fflush(stdout);
+        log_debug(L"180 degree change, no need to swap dmPelsHeight and dmPelsWidth");
     }
 
     // NOTE: AFTER THIS CALL MON IS POINTING TO TRASH BECAUSE WM_DISPLAYCHANGE TRIGGERS
     LONG ret = ChangeDisplaySettingsEx(temp_mon.name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
     if (ret != DISP_CHANGE_SUCCESSFUL) {
-        wprintf(L"Display change failed: 0x%04X\n", ret);
+        log_error(L"Display change failed: 0x%04X", ret);
     } else {
-        wprintf(L"Display change was successful\n");
+        log_debug(L"Display change was successful");
         // Show a notification
         // TODO: Don't use friendly name as it isn't always available
         show_notification_message(ctx, L"Changed display %s orientation to %s", temp_mon.friendly_name,
                                   orientation_str[orientation]);
     }
-    fflush(stdout);
 
     return ret == DISP_CHANGE_SUCCESSFUL;
 }
@@ -338,16 +335,15 @@ static BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orie
 static int read_config(app_ctx_t *ctx, BOOL reload) {
     if (reload == TRUE) {
         // Free previous config
-        wprintf(L"Freeing previous config\n");
-        fflush(stdout);
+        log_debug(L"Freeing previous config");
         disp_config_destroy(&(ctx->config));
     }
-    wprintf(L"Reading config\n");
-    fflush(stdout);
+    log_info(L"Reading config");
     if (disp_config_read_file("disp.cfg", &(ctx->config)) != DISP_CONFIG_SUCCESS) {
         wchar_t err_msg[1024] = {0};
-        StringCbPrintf((wchar_t *) &err_msg, 1024, L"Could not read configuration file:\n%s\n",
+        StringCbPrintf((wchar_t *) &err_msg, 1024, L"Could not read configuration file:\n%s",
                        disp_config_get_err_msg(&(ctx->config)));
+        log_error(err_msg);
         MessageBox(NULL, (wchar_t *) err_msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return 1;
     }
@@ -358,23 +354,22 @@ static void flag_matching_presets(app_ctx_t *ctx) {
     display_preset_t **presets;
     int preset_count = disp_config_get_presets(&(ctx->config), &presets);
 
-    wprintf(L"Got %d presets\n", preset_count);
+    log_trace(L"Got %d presets", preset_count);
 
     for (int i = 0; i < preset_count; i++) {
         display_preset_t *preset = presets[i];
 
         if (disp_config_preset_matches_current(preset, ctx) == DISP_CONFIG_SUCCESS) {
-            wprintf(L"Preset \"%s\" matches with the current monitor setup\n", preset->name);
+            log_trace(L"Preset \"%s\" matches with the current monitor setup", preset->name);
             preset->applicable = 1;
         } else {
-            wprintf(L"Preset \"%s\" does not match with the current monitor setup\n", preset->name);
+            log_trace(L"Preset \"%s\" does not match with the current monitor setup", preset->name);
         }
     }
 }
 
 static void reload(app_ctx_t *ctx) {
-    wprintf(L"Reloading\n");
-    fflush(stdout);
+    log_debug(L"Reloading");
     populate_display_data(ctx);
     read_config(ctx, TRUE);
     flag_matching_presets(ctx);
@@ -413,8 +408,7 @@ static void change_orientation_devmode(DEVMODE *devmode, int orientation) {
         devmode->dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT;
     } else {
         // 180 degree change, don't swap
-        wprintf(L"180 degree change, no need to swap dmPelsHeight and dmPelsWidth\n");
-        fflush(stdout);
+        log_debug(L"180 degree change, no need to swap dmPelsHeight and dmPelsWidth");
     }
 }
 
@@ -435,13 +429,11 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
     if (ctx->display_update_in_progress) {
         // TODO: What to do? Can't sleep because it will block the whole application
         // Just give up for now
-        wprintf(L"Display update already in progress, can't change settings\n");
-        fflush(stdout);
+        log_warning(L"Display update already in progress, can't change settings");
         return;
     }
     ctx->display_update_in_progress = TRUE;
-    wprintf(L"Applying preset \"%s\"\n", preset->name);
-    fflush(stdout);
+    log_info(L"Applying preset \"%s\"", preset->name);
 
     size_t success_count = 0;
     for (size_t i = 0; i < preset->display_count; i++) {
@@ -452,6 +444,7 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
         monitor_t *monitor;
         if (get_matching_monitor(ctx, settings->device_path, &monitor) != TRUE) {
             // No matching monitor (this shouldn't happen as we check the monitors on WM_DISPLAYCHANGE)
+            log_error(L"Failed to apply preset: no matching monitor");
             MessageBox(ctx->main_window_hwnd, L"Failed to apply preset: no matching monitor", APP_NAME,
                        MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
             ctx->display_update_in_progress = FALSE;
@@ -468,19 +461,20 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
         // Apply the devmode
         LONG ret = ChangeDisplaySettingsEx(monitor->name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
         if (ret != DISP_CHANGE_SUCCESSFUL) {
-            wprintf(L"Display change failed: 0x%04X\n", ret);
+            log_error(L"Display change failed: 0x%04X", ret);
         } else {
-            wprintf(L"Display change was successful\n");
+            log_debug(L"Display change was successful");
             success_count++;
         }
-        fflush(stdout);
     }
 
     if (success_count == preset->display_count) {
+        log_info(L"Display preset changed to %s", preset->name);
         // Show a notification
         show_notification_message(ctx, L"Changed display preset to \"%s\"", preset->name);
         // TODO: Auto-revert period?
     } else {
+        log_warning(L"Display preset change failed, %d fails", (preset->display_count - success_count));
         // One or more changes failed
         show_notification_message(ctx, L"Failed to change display preset to \"%s\"", preset->name);
         // TODO: Try to revert?
@@ -494,9 +488,6 @@ static void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
 
     // All done
     ctx->display_update_in_progress = FALSE;
-
-    wprintf(L"apply_preset complete\n");
-    fflush(stdout);
 }
 
 static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
@@ -521,19 +512,18 @@ static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LP
                         wchar_t msg[100] = {0};
                         StringCbPrintf((wchar_t *) msg, 100, L"Failed to get dialog name string: 0x%08X",
                                        GetLastError());
+                        log_error(msg);
                         MessageBox(hwnd, msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
                         EndDialog(hwnd, wparam);
                         return TRUE;
                     }
 
-                    wprintf(L"User selected OK\n");
-                    fflush(stdout);
+                    log_debug(L"User selected OK");
                     EndDialog(hwnd, wparam);
                     return TRUE;
                 case IDCANCEL:;
                     // User selected cancel
-                    wprintf(L"User selected Cancel\n");
-                    fflush(stdout);
+                    log_debug(L"User selected Cancel");
                     // Get the data pointer and set the dialog to be canceled
                     preset_dialog_data_t *dialog_data = (preset_dialog_data_t *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
                     dialog_data->cancel = TRUE;
@@ -551,20 +541,17 @@ static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LP
 
 static void save_current_config(app_ctx_t *ctx) {
     // Create input dialog
-    wprintf(L"Showing preset name dialog\n");
-    fflush(stdout);
+    log_debug(L"Showing preset name dialog");
     preset_dialog_data_t data = {0};
     // wchar_t preset_name[64] = {0};
     DialogBoxParam(NULL, MAKEINTRESOURCE(IDD_DIALOG_PRESET_SAVE), ctx->main_window_hwnd, save_dialog_proc,
                    (LPARAM) &data);
     if (data.cancel == TRUE) {
         // User canceled
-        wprintf(L"User canceled name input\n");
-        fflush(stdout);
+        log_debug(L"User canceled name input");
         return;
     }
-    wprintf(L"Preset name dialog closed, selected name: \"%s\"\n", data.preset_name);
-    fflush(stdout);
+    log_debug(L"Preset name dialog closed, selected name: \"%s\"", data.preset_name);
     // Add new preset to the app_config
     if (disp_config_create_preset(data.preset_name, ctx) != DISP_CONFIG_SUCCESS) {
         // Failed
@@ -595,15 +582,14 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 
     switch (umsg) {
         case WM_DESTROY:;
-            wprintf(L"Shutting down\n");
+            log_info(L"Shutting down");
             NOTIFYICONDATA nid = {0};
             nid.cbSize = sizeof(NOTIFYICONDATA);
             nid.uFlags = NIF_GUID;
             nid.guidItem = ctx->notify_guid;
             BOOL ret = Shell_NotifyIcon(NIM_DELETE, &nid);
             if (!ret) {
-                wprintf(L"Couldn't delete notifyicon: ");
-                wprintf(L"%ld\n", GetLastError());
+                log_error(L"Couldn't delete notifyicon, error %ld", GetLastError());
             }
             DestroyMenu(ctx->notif_menu);
             PostQuitMessage(0);
@@ -621,6 +607,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
                     if (!TrackPopupMenuEx(ctx->notif_menu, 0, menu_x, menu_y, hwnd, NULL)) {
                         wchar_t err_str[100];
                         StringCbPrintf(err_str, 100, L"TrackPopupMenuEx failed: %ld", GetLastError());
+                        log_error(err_str);
                         MessageBoxW(hwnd, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
                     }
                     break;
@@ -634,8 +621,8 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
             }
             // Menu item selection
             SHORT selection = LOWORD(wparam);
-            wprintf(L"User selected: 0x%04X\n", selection);
-            fflush(stdout);
+            log_trace(L"User selected: 0x%04X", selection);
+
             switch (selection) {
                 case NOTIF_MENU_EXIT:;
                     // Exit item selected
@@ -675,8 +662,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
                 // User made a monitor orientation selection
                 int monitor_idx = selection & NOTIF_MENU_MONITOR_ORIENTATION_MONITOR;
                 int orientation = (selection & NOTIF_MENU_MONITOR_ORIENTATION_POSITION) >> 10;
-                wprintf(L"User wants to change monitor %d orientation to %d\n", monitor_idx, orientation);
-                fflush(stdout);
+                log_debug(L"User wants to change monitor %d orientation to %d", monitor_idx, orientation);
                 monitor_t mon = ctx->monitors[monitor_idx];
                 change_display_orientation(ctx, &mon, orientation);
                 break;
@@ -686,8 +672,7 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
                 // Config selected
                 int config_idx = selection & NOTIF_MENU_CONFIG_INDEX;
                 display_preset_t *preset = ctx->config.presets[config_idx];
-                wprintf(L"User wants to apply preset %d (\"%s\")\n", config_idx, preset->name);
-                fflush(stdout);
+                log_debug(L"User wants to apply preset %d (\"%s\")", config_idx, preset->name);
                 // Apply preset
                 apply_preset(ctx, preset);
             }
@@ -696,15 +681,13 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 
         case WM_DISPLAYCHANGE:;
             // Display settings have changed
-            wprintf(L"WM_DISPLAYCHANGE: Display settings have changed\n");
+            log_debug(L"WM_DISPLAYCHANGE: Display settings have changed");
             if (ctx->display_update_in_progress) {
                 // Display update in progress
-                wprintf(L"Display update in progress, not reloading\n");
-                fflush(stdout);
+                log_warning(L"Display update in progress, not reloading");
                 break;
             }
-            wprintf(L"Reloading information and config\n");
-            fflush(stdout);
+            log_debug(L"Reloading information and config\n");
             ctx->display_update_in_progress = TRUE;
             populate_display_data(ctx);
             create_tray_menu(ctx);
@@ -723,8 +706,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     // TODO: Extract initializing to a new function/functions
 
-    wprintf(L"Initializing\n");
-    fflush(stdout);
+    log_info(L"Initializing");
 
     app_ctx_t app_context = {0};
     app_context.display_update_in_progress = FALSE;
@@ -741,16 +723,18 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     if (!RegisterClassEx(&wcex)) {
         int err = GetLastError();
+        log_error(L"RegisterClassEx failed: %ld", err);
         wchar_t err_str[100];
         StringCbPrintf(err_str, 100, L"RegisterClassEx failed: %ld", err);
         MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return 1;
     }
 
-    HWND hwnd = CreateWindowW(L"WinClass", APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 500, 100, NULL,
-                              NULL, h_inst, NULL);
+    HWND hwnd = CreateWindow(L"WinClass", APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 500, 100, NULL,
+                             NULL, h_inst, NULL);
     if (!hwnd) {
         int err = GetLastError();
+        log_error(L"CreateWindow failed: %ld", err);
         wchar_t err_str[100];
         StringCbPrintf(err_str, 100, L"CreateWindowW failed: %ld", err);
         MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
@@ -808,8 +792,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
         show_notification_message(&app_context, L"Display settings manager is running");
     }
 
-    wprintf(L"Ready\n");
-    fflush(stdout);
+    log_info(L"Ready");
 
     // Init OK, start main message loop
     MSG msg;
@@ -818,8 +801,10 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
         DispatchMessage(&msg);
     }
 
+    log_info(L"Cleaning up");
     free_monitors(&app_context);
     disp_config_destroy(&app_context.config);
 
+    log_info(L"Exiting");
     return (int) msg.wParam;
 }

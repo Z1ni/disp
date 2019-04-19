@@ -1,6 +1,6 @@
 ARCH?=x86_64
 CC=$(ARCH)-w64-mingw32-gcc
-CFLAGS=-std=gnu99 -Wall -Wextra -Wno-unused-parameter -Iinclude/ -Ires/ -mwindows 
+CFLAGS=-std=gnu99 -Wall -Wextra -Wno-unused-parameter -Iinclude/ -Ires/ -mwindows -DLOG_COLOR_OUTPUT
 LIBS=-lole32 -lconfig
 SRCDIR=src
 OBJDIR=obj

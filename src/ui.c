@@ -114,6 +114,9 @@ static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LP
         case WM_INITDIALOG:;
             // Set the name pointer from the init message
             SetWindowLongPtr(hwnd, GWLP_USERDATA, lparam);
+            // Focus to the text field
+            HWND text_ctrl = GetDlgItem(hwnd, IDC_PRESET_NAME);
+            SendMessage(hwnd, WM_NEXTDLGCTL, (WPARAM) text_ctrl, TRUE);
             break;
 
         case WM_COMMAND:

@@ -16,6 +16,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#define UNICODE
+#include <shlwapi.h>
 #include "app.h"
 #include "ui.h"
 #include "disp.h"
@@ -35,7 +37,18 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     // Populate display data
     populate_display_data(&app_context);
 
-    // TODO: Create config file if it does not exist
+    // Check if a config file exists
+    if (!PathFileExists(L"disp.cfg")) {
+        // No config exists, create a config file
+        if (disp_config_save_file("disp.cfg", &app_context.config) != DISP_CONFIG_SUCCESS) {
+            // Config file creation failed
+            log_error(L"Could not create a config file: %s", disp_config_get_err_msg(&app_context.config));
+            MessageBox(hwnd, L"Could not create a config file", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+            DestroyWindow(hwnd);
+            return 1;
+        }
+        log_info(L"Config file was created");
+    }
 
     if (read_config(&app_context, FALSE) != 0) {
         DestroyWindow(hwnd);

@@ -36,6 +36,8 @@ BEGIN
     CONTROL         "Enter a name for the preset:",IDC_STATIC,"Static",SS_SIMPLE | WS_GROUP,7,7,171,8
 END
 
+// Manifest
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "disp.manifest"
 
 /////////////////////////////////////////////////////////////////////////////
 //

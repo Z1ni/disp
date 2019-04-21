@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#define LIBCONFIG_STATIC
 #include <libconfig.h>
 
 #define DISP_CONFIG_SUCCESS 0

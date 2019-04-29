@@ -152,7 +152,7 @@ void populate_display_data(app_ctx_t *ctx) {
     // Query information
     ret = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &num_of_paths, display_paths, &num_of_modes, display_modes, NULL);
     if (ret != ERROR_SUCCESS) {
-        log_error(L"QueryDisplayConfig failed: 0x%04X\n", ret);
+        log_error(L"QueryDisplayConfig failed: 0x%04X", ret);
         free(display_paths);
         free(display_modes);
         return;
@@ -173,7 +173,7 @@ void populate_display_data(app_ctx_t *ctx) {
         device_name.header = header;
         ret = DisplayConfigGetDeviceInfo((DISPLAYCONFIG_DEVICE_INFO_HEADER *) &device_name);
         if (ret != ERROR_SUCCESS) {
-            log_error(L"DisplayConfigGetDeviceInfo failed: 0x%04X\n", ret);
+            log_error(L"DisplayConfigGetDeviceInfo failed: 0x%04X", ret);
             free(display_paths);
             free(display_modes);
             return;
@@ -190,7 +190,7 @@ void populate_display_data(app_ctx_t *ctx) {
             break;
         }
         if (!found_monitor) {
-            log_debug(L"No corresponding monitor entry for %s\n", device_name.monitorDevicePath);
+            log_debug(L"No corresponding monitor entry for %s", device_name.monitorDevicePath);
         }
     }
 

@@ -277,7 +277,7 @@ static LRESULT CALLBACK main_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARA
                 log_warning(L"Display update in progress, not reloading");
                 break;
             }
-            log_debug(L"Reloading information and config\n");
+            log_debug(L"Reloading information and config");
             ctx->display_update_in_progress = TRUE;
             populate_display_data(ctx);
             create_tray_menu(ctx);

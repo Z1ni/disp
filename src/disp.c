@@ -198,49 +198,6 @@ void populate_display_data(app_ctx_t *ctx) {
     free(display_modes);
 }
 
-BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orientation) {
-    if (mon->devmode.dmDisplayOrientation == orientation) {
-        // No change
-        return TRUE;
-    }
-
-    // Copy monitor_t to temporary struct as a possible WM_DISPLAYCHANGE trigger
-    // creates monitor data and by doing so invalidates the monitor pointer.
-    monitor_t temp_mon = {0};
-    memcpy(&temp_mon, mon, sizeof(monitor_t));
-
-    DEVMODE tmp = temp_mon.devmode;
-    tmp.dmDisplayOrientation = orientation;
-    tmp.dmFields = DM_DISPLAYORIENTATION;
-    // Check if we should swap dmPelsHeight and dmPelsWidth (if the change is 90 degrees)
-    int diff = abs(orientation - temp_mon.devmode.dmDisplayOrientation) % 3;
-    if (diff < 2) {
-        // 90 degree change, swap dmPelsHeight and dmPelsWidth
-        int tempPelsHeight = tmp.dmPelsHeight;
-        tmp.dmPelsHeight = tmp.dmPelsWidth;
-        tmp.dmPelsWidth = tempPelsHeight;
-        tmp.dmFields |= DM_PELSWIDTH | DM_PELSHEIGHT;
-    } else {
-        // 180 degree change, don't swap
-        log_debug(L"180 degree change, no need to swap dmPelsHeight and dmPelsWidth");
-    }
-
-    // NOTE: AFTER THIS CALL MON IS POINTING TO TRASH BECAUSE WM_DISPLAYCHANGE TRIGGERS
-    LONG ret = ChangeDisplaySettingsEx(temp_mon.name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
-    if (ret != DISP_CHANGE_SUCCESSFUL) {
-        log_error(L"Display change failed: 0x%04X", ret);
-    } else {
-        log_debug(L"Display change was successful");
-        // Show a notification
-        // TODO: Don't use friendly name as it isn't always available
-        LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
-        show_notification_message(ctx, L"Changed display %s orientation to %s", temp_mon.friendly_name,
-                                  orientation_str[orientation]);
-    }
-
-    return ret == DISP_CHANGE_SUCCESSFUL;
-}
-
 int read_config(app_ctx_t *ctx, BOOL reload) {
     if (reload == TRUE) {
         // Free previous config
@@ -332,6 +289,17 @@ static void change_position_devmode(DEVMODE *devmode, int pos_x, int pos_y) {
     devmode->dmFields |= DM_POSITION;
 }
 
+static BOOL change_display_settings(wchar_t *monitor_name, DEVMODE *devmode) {
+    LONG ret = ChangeDisplaySettingsEx(monitor_name, devmode, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
+    if (ret != DISP_CHANGE_SUCCESSFUL) {
+        log_error(L"Display change failed: 0x%04X", ret);
+        return FALSE;
+    } else {
+        log_debug(L"Display change was successful");
+        return TRUE;
+    }
+}
+
 void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
     // For now we support changing display positions and orientations
 
@@ -368,11 +336,8 @@ void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
         // Make the needed position changes
         change_position_devmode(&tmp, settings->pos_x, settings->pos_y);
         // Apply the devmode
-        LONG ret = ChangeDisplaySettingsEx(monitor->name, &tmp, NULL, CDS_UPDATEREGISTRY | CDS_GLOBAL, NULL);
-        if (ret != DISP_CHANGE_SUCCESSFUL) {
-            log_error(L"Display change failed: 0x%04X", ret);
-        } else {
-            log_debug(L"Display change was successful");
+        if (change_display_settings(monitor->name, &tmp)) {
+            // Success
             success_count++;
         }
     }
@@ -397,6 +362,32 @@ void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
 
     // All done
     ctx->display_update_in_progress = FALSE;
+}
+
+BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orientation) {
+    if (mon->devmode.dmDisplayOrientation == orientation) {
+        // No change
+        return TRUE;
+    }
+
+    DEVMODE tmp = {0};
+    memcpy(&tmp, &(mon->devmode), sizeof(DEVMODE));
+    // Make the needed devmode changes to change the orientation (if needed)
+    change_orientation_devmode(&tmp, orientation);
+
+    // Apply the devmode
+    if (change_display_settings(mon->name, &tmp)) {
+        // Success
+        log_debug(L"Display change was successful");
+        // Show a notification
+        // TODO: Don't use friendly name as it isn't always available
+        LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
+        show_notification_message(ctx, L"Changed display %s orientation to %s", mon->friendly_name,
+                                  orientation_str[orientation]);
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 void save_current_config(app_ctx_t *ctx) {

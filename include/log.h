@@ -34,6 +34,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define log_warning(...) log_log(LOG_WARNING, __VA_ARGS__)
 #define log_error(...) log_log(LOG_ERROR, __VA_ARGS__)
 
+void log_set_level(int level);
 void log_log(int level, const wchar_t *format, ...);
 
 #endif

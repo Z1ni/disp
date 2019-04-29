@@ -7,7 +7,16 @@ static wchar_t *log_level_str[5] = {L"TRACE", L"DEBUG", L"INFO", L"WARNING", L"E
 
 static const wchar_t *log_level_colors[5] = {L"\x1b[94m", L"\x1b[36m", L"\x1b[32m", L"\x1b[33m", L"\x1b[31m"};
 
+static int log_level = LOG_WARNING;
+
+void log_set_level(int level) {
+    log_level = level;
+}
+
 void log_log(int level, const wchar_t *format, ...) {
+    if (level < log_level) {
+        return;
+    }
     time_t now = time(NULL);
     struct tm *time_info = localtime(&now);
 

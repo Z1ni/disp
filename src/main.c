@@ -48,10 +48,33 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     LocalFree(argv);
 
+    // Check if an instance is already running
+    HANDLE instance_mutex = CreateMutex(NULL, FALSE, L"Zini.Disp");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        log_info(L"An instance is already running, exiting");
+        return 0;
+    }
+    if (!instance_mutex) {
+        if (GetLastError() == ERROR_ACCESS_DENIED) {
+            // Try to open
+            instance_mutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, L"Zini.Disp");
+            if (!instance_mutex) {
+                // Failed
+                // TODO: MessageBox
+                log_error(L"Failed to open mutex: 0x%04X", GetLastError());
+                return 1;
+            }
+        }
+        log_error(L"Could not create app mutex: 0x%04X", GetLastError());
+        // TODO: MessageBox
+        return 1;
+    }
+
     log_info(L"Initializing");
 
     app_ctx_t app_context = {0};
     app_context.display_update_in_progress = FALSE;
+    app_context.instance_mutex = instance_mutex;
 
     HWND hwnd = init_main_window(&app_context, h_inst);
 
@@ -69,6 +92,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
             log_error(L"Could not create a config file: %s", disp_config_get_err_msg(&app_context.config));
             MessageBox(hwnd, L"Could not create a config file", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
             DestroyWindow(hwnd);
+            ReleaseMutex(app_context.instance_mutex);
             return 1;
         }
         log_info(L"Config file was created");
@@ -76,6 +100,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     if (read_config(&app_context, FALSE) != 0) {
         DestroyWindow(hwnd);
+        ReleaseMutex(app_context.instance_mutex);
         return 1;
     }
 
@@ -100,6 +125,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     log_info(L"Cleaning up");
     free_monitors(&app_context);
     disp_config_destroy(&app_context.config);
+    ReleaseMutex(app_context.instance_mutex);
 
     log_info(L"Exiting");
     return (int) msg.wParam;

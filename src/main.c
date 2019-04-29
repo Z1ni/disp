@@ -24,6 +24,30 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, int n_show_cmd) {
 
+    log_set_level(LOG_WARNING);
+
+    // Parse command line arguments
+    int argc = 0;
+    wchar_t **argv = NULL;
+    argv = CommandLineToArgvW(GetCommandLine(), &argc);
+
+    for (int i = 1; i < argc; i++) {
+        if (wcscmp(argv[i], L"-v") == 0) {
+            // Verbose
+            log_set_level(LOG_TRACE);
+        } else if (wcscmp(argv[i], L"-V") == 0) {
+            // Version
+            wprintf(APP_NAME L" " APP_VER L"\n");
+            return 0;
+        } else if (wcscmp(argv[i], L"-h") == 0) {
+            // Help
+            wprintf(L"Usage: %s [-hvV]\n", argv[0]);
+            return 0;
+        }
+    }
+
+    LocalFree(argv);
+
     log_info(L"Initializing");
 
     app_ctx_t app_context = {0};

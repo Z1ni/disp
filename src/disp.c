@@ -217,8 +217,13 @@ void populate_display_data(app_ctx_t *ctx) {
             if (wcscmp(ctx->monitors[i].device_id, device_name.monitorDevicePath) != 0) {
                 continue;
             }
-            // Copy friendly name to the monitor entry
-            StringCchCopy(ctx->monitors[i].friendly_name, 64, device_name.monitorFriendlyDeviceName);
+            if (device_name.monitorFriendlyDeviceName == NULL || wcslen(device_name.monitorFriendlyDeviceName) == 0) {
+                // No friendly device name from OS, use numbering
+                StringCbPrintf(ctx->monitors[i].friendly_name, 64, L"Display %u", ctx->monitors[i].num);
+            } else {
+                // Friendly name available, copy it to the monitor entry
+                StringCchCopy(ctx->monitors[i].friendly_name, 64, device_name.monitorFriendlyDeviceName);
+            }
             found_monitor = TRUE;
             break;
         }

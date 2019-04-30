@@ -36,6 +36,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Windows.h>
 
 typedef struct {
+    unsigned int num;
     wchar_t name[CCHDEVICENAME];
     wchar_t friendly_name[64];
     RECT rect;

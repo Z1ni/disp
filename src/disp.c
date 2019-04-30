@@ -57,6 +57,31 @@ static BOOL CALLBACK monitor_enum_proc(HMONITOR mon, HDC hdc_mon, LPRECT lprc_mo
     return TRUE;
 }
 
+static int monitor_coordinate_compare(const void *a, const void *b) {
+    monitor_t *a_mon = (monitor_t *) a;
+    monitor_t *b_mon = (monitor_t *) b;
+
+    LONG a_x = a_mon->virt_pos.x;
+    LONG a_y = a_mon->virt_pos.y;
+    LONG b_x = b_mon->virt_pos.x;
+    LONG b_y = b_mon->virt_pos.y;
+
+    if (a_y == b_y && a_x == b_x) {
+        // The two monitors are in the same place
+        // Shouldn't be possible
+        return 0;
+    }
+
+    // If the A is more left than B
+    // If A.X and B.X are the same, compare Y so that the topmost comes first
+    if (a_x < b_x || (a_x == b_x && a_y < b_y)) {
+        // A before B
+        return -1;
+    }
+    // B before A
+    return 1;
+}
+
 void populate_display_data(app_ctx_t *ctx) {
     int virt_width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
     int virt_height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
@@ -83,6 +108,14 @@ void populate_display_data(app_ctx_t *ctx) {
 
         memcpy(&(ctx->monitors[i].devmode), &tmp, sizeof(DEVMODE));
         memcpy(&(ctx->monitors[i].virt_pos), &tmp.dmPosition, sizeof(POINTL));
+    }
+
+    // Sort monitors by their coordinates so we can number them (the leftmost is 1, etc.)
+    qsort(ctx->monitors, ctx->monitor_count, sizeof(monitor_t), monitor_coordinate_compare);
+    // Number the monitors
+    for (size_t i = 0; i < ctx->monitor_count; i++) {
+        monitor_t *mon = &(ctx->monitors[i]);
+        mon->num = i + 1;
     }
 
     // Get GDI and SetupAPI display names so that we can associate correct friendly monitor names

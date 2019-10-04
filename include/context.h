@@ -22,6 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "app.h"
 
 typedef struct {
+    HINSTANCE hinstance;
     app_config_t config;
     virt_size_t display_virtual_size;
     HMENU notif_menu;

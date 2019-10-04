@@ -73,10 +73,12 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     log_info(L"Initializing");
 
     app_ctx_t app_context = {0};
+    app_context.hinstance = h_inst;
     app_context.display_update_in_progress = FALSE;
     app_context.instance_mutex = instance_mutex;
 
-    HWND hwnd = init_main_window(&app_context, h_inst);
+    HWND hwnd = init_main_window(&app_context);
+    init_virt_desktop_window(&app_context);
 
     // Create tray icon
     create_tray_icon(&app_context, hwnd);

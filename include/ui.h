@@ -30,7 +30,9 @@ typedef struct {
 void create_tray_menu(app_ctx_t *ctx);
 void show_notification_message(app_ctx_t *ctx, STRSAFE_LPCWSTR format, ...);
 void show_save_dialog(app_ctx_t *ctx, preset_dialog_data_t *data);
-HWND init_main_window(app_ctx_t *ctx, HINSTANCE h_inst);
+HWND init_main_window(app_ctx_t *ctx);
+int init_virt_desktop_window(app_ctx_t *ctx);
+HWND show_virt_desktop_window(app_ctx_t *ctx);
 int create_tray_icon(app_ctx_t *ctx, HWND hwnd);
 
 #endif

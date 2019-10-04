@@ -86,6 +86,7 @@ void create_tray_menu(app_ctx_t *ctx) {
     AppendMenu(ctx->notif_menu, MF_SEPARATOR, 0, NULL);
     AppendMenu(ctx->notif_menu, 0, NOTIF_MENU_ABOUT_DISPLAYS, L"About displays");
     AppendMenu(ctx->notif_menu, MF_POPUP, (UINT_PTR) notif_menu_config, L"Config");
+    AppendMenu(ctx->notif_menu, 0, NOTIF_MENU_SHOW_ALIGN_PATTERN, L"Show alignment pattern");
     AppendMenu(ctx->notif_menu, MF_SEPARATOR, 0, NULL);
 
     AppendMenu(ctx->notif_menu, 0, NOTIF_MENU_EXIT, L"Exit");
@@ -246,6 +247,12 @@ static LRESULT CALLBACK main_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARA
                     // Save current config
                     save_current_config(ctx);
                     break;
+
+                case NOTIF_MENU_SHOW_ALIGN_PATTERN:;
+                    // Show alignment pattern window
+                    log_info(L"Showing alignment pattern window");
+                    show_virt_desktop_window(ctx);
+                    break;
             }
 
             if ((NOTIF_MENU_MONITOR_ORIENTATION_SELECT & selection) == NOTIF_MENU_MONITOR_ORIENTATION_SELECT) {
@@ -292,7 +299,9 @@ static LRESULT CALLBACK main_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARA
     return 0;
 }
 
-HWND init_main_window(app_ctx_t *ctx, HINSTANCE h_inst) {
+HWND init_main_window(app_ctx_t *ctx) {
+    HINSTANCE h_inst = ctx->hinstance;
+
     WNDCLASSEX wcex = {0};
     wcex.cbSize = sizeof(WNDCLASSEX);
     wcex.style = CS_HREDRAW | CS_VREDRAW;
@@ -333,6 +342,112 @@ HWND init_main_window(app_ctx_t *ctx, HINSTANCE h_inst) {
     UpdateWindow(hwnd);
 
     ctx->main_window_hwnd = hwnd;
+    return hwnd;
+}
+
+static LRESULT CALLBACK virt_desktop_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
+    // Get window pointer that points to the app context
+    app_ctx_t *ctx = (app_ctx_t *) GetWindowLongPtr(hwnd, GWLP_USERDATA);
+
+    PAINTSTRUCT ps;
+    HDC hdc;
+
+    RECT r;
+    HBRUSH black = GetStockBrush(BLACK_BRUSH);
+    HBRUSH white = GetStockBrush(WHITE_BRUSH);
+    HBRUSH *brushes[2] = {&black, &white};
+    int cur_brush = 0;
+    int row_first_brush = 0;
+
+    switch (umsg) {
+        case WM_PAINT:;
+            hdc = BeginPaint(hwnd, &ps);
+
+            // Draw checkerboard pattern
+            cur_brush = 0;
+            for (int y = 0; y < ctx->display_virtual_size.height; y += 100) {
+                for (int x = 0; x < ctx->display_virtual_size.width; x += 100) {
+                    if (x == 0) {
+                        row_first_brush = cur_brush;
+                    }
+                    SetRect(&r, x, y, x + 100, y + 100);
+                    FillRect(hdc, &r, *(brushes[cur_brush]));
+                    cur_brush = (cur_brush + 1) % 2;
+                }
+                if (row_first_brush == cur_brush) {
+                    cur_brush = (cur_brush + 1) % 2;
+                }
+            }
+
+            EndPaint(hwnd, &ps);
+            break;
+
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+        case WM_LBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+        case WM_CLOSE:
+            // Close this window
+            DestroyWindow(hwnd);
+            break;
+
+        default:
+            return DefWindowProc(hwnd, umsg, wparam, lparam);
+    }
+    return 0;
+}
+
+int init_virt_desktop_window(app_ctx_t *ctx) {
+    HINSTANCE h_inst = ctx->hinstance;
+
+    WNDCLASSEX wcex = {0};
+    wcex.cbSize = sizeof(WNDCLASSEX);
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
+    wcex.lpfnWndProc = virt_desktop_wnd_proc;
+    wcex.hInstance = h_inst;
+    wcex.hIcon = NULL;
+    wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wcex.hbrBackground = CreateSolidBrush(RGB(0x80, 0, 0xFF));
+    wcex.lpszClassName = L"VirtWinClass";
+
+    if (!RegisterClassEx(&wcex)) {
+        int err = GetLastError();
+        log_error(L"RegisterClassEx failed for virtual desktop window: %ld", err);
+        wchar_t err_str[100];
+        StringCbPrintf(err_str, 100, L"RegisterClassEx failed: %ld", err);
+        MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        return 1;
+    }
+
+    return 0;
+}
+
+HWND show_virt_desktop_window(app_ctx_t *ctx) {
+    HINSTANCE h_inst = ctx->hinstance;
+
+    virt_size_t *vs = &ctx->display_virtual_size;
+    HWND hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOPMOST, L"VirtWinClass", APP_NAME, WS_POPUP,
+                               -1680, 0, vs->width, vs->height, NULL, NULL, h_inst, NULL);
+
+    if (!hwnd) {
+        int err = GetLastError();
+        log_error(L"CreateWindow failed for virtual desktop window: %ld", err);
+        wchar_t err_str[100];
+        StringCbPrintf(err_str, 100, L"CreateWindowW failed: %ld", err);
+        MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        return NULL;
+    }
+
+    // Make the window transparent
+    SetLayeredWindowAttributes(hwnd, RGB(0x80, 0, 0xFF), 0, LWA_COLORKEY);
+
+    // Set app context as the window user data so the window procedure can access the context without global variables
+    SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR) ctx);
+    SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+
+    ShowWindow(hwnd, SW_SHOW);
+
     return hwnd;
 }
 

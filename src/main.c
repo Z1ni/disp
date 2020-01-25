@@ -35,18 +35,24 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
         if (wcscmp(argv[i], L"-v") == 0) {
             // Verbose
             log_set_level(LOG_TRACE);
+        } else if (wcscmp(argv[i], L"-l") == 0) {
+            // Create logfile
+            log_set_file_level(LOG_TRACE);
         } else if (wcscmp(argv[i], L"-V") == 0) {
             // Version
             wprintf(APP_NAME L" " APP_VER L"\n");
             return 0;
         } else if (wcscmp(argv[i], L"-h") == 0) {
             // Help
-            wprintf(L"Usage: %s [-hvV]\n", argv[0]);
+            wprintf(L"Usage: %s [-hvlV]\n", argv[0]);
             return 0;
         }
     }
 
     LocalFree(argv);
+
+    // Init logging
+    log_init();
 
     // Check if an instance is already running
     HANDLE instance_mutex = CreateMutex(NULL, FALSE, L"Zini.Disp");
@@ -130,5 +136,6 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     ReleaseMutex(app_context.instance_mutex);
 
     log_info(L"Exiting");
+    log_finish();
     return (int) msg.wParam;
 }

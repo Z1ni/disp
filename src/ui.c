@@ -467,7 +467,11 @@ int create_tray_icon(app_ctx_t *ctx, HWND hwnd) {
 
     BOOL ret = Shell_NotifyIcon(NIM_ADD, &nid);
     if (!ret) {
-        MessageBox(NULL, L"Shell_NotifyIcon failed", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        int err = GetLastError();
+        log_error(L"Shell_NotifyIcon failed: %ld", err);
+        wchar_t err_str[100];
+        StringCbPrintf(err_str, 100, L"Shell_NotifyIcon failed: %ld", err);
+        MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         DestroyWindow(hwnd);
         return 1;
     }

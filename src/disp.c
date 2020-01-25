@@ -112,10 +112,16 @@ void populate_display_data(app_ctx_t *ctx) {
 
     // Sort monitors by their coordinates so we can number them (the leftmost is 1, etc.)
     qsort(ctx->monitors, ctx->monitor_count, sizeof(monitor_t), monitor_coordinate_compare);
-    // Number the monitors
+    // Number the monitors and find out the smallest coordinates
     for (size_t i = 0; i < ctx->monitor_count; i++) {
         monitor_t *mon = &(ctx->monitors[i]);
         mon->num = i + 1;
+        if (mon->virt_pos.x < ctx->min_monitor_pos.x) {
+            ctx->min_monitor_pos.x = mon->virt_pos.x;
+        }
+        if (mon->virt_pos.y < ctx->min_monitor_pos.y) {
+            ctx->min_monitor_pos.y = mon->virt_pos.y;
+        }
     }
 
     // Get GDI and SetupAPI display names so that we can associate correct friendly monitor names

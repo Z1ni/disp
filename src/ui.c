@@ -426,9 +426,11 @@ int init_virt_desktop_window(app_ctx_t *ctx) {
 HWND show_virt_desktop_window(app_ctx_t *ctx) {
     HINSTANCE h_inst = ctx->hinstance;
 
+    long leftmost_x = ctx->min_monitor_pos.x;
+    long leftmost_y = ctx->min_monitor_pos.y;
     virt_size_t *vs = &ctx->display_virtual_size;
     HWND hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOPMOST, L"VirtWinClass", APP_NAME, WS_POPUP,
-                               -1680, 0, vs->width, vs->height, NULL, NULL, h_inst, NULL);
+                               leftmost_x, leftmost_y, vs->width, vs->height, NULL, NULL, h_inst, NULL);
 
     if (!hwnd) {
         int err = GetLastError();

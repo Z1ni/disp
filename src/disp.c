@@ -408,6 +408,28 @@ void apply_preset(app_ctx_t *ctx, display_preset_t *preset) {
     ctx->display_update_in_progress = FALSE;
 }
 
+void apply_preset_by_name(app_ctx_t *ctx, const wchar_t *name) {
+    // Find a preset with the given name
+    // Use case-insensitive matching
+    log_debug(L"Searching for preset \"%s\"", name);
+    BOOL found_preset = FALSE;
+    for (size_t i = 0; i < ctx->config.preset_count; i++) {
+        display_preset_t *preset = ctx->config.presets[i];
+
+        if (_wcsicmp(name, preset->name) == 0 && preset->applicable == 1) {
+            // Matching name
+            log_debug(L"Found matching preset, applying");
+            apply_preset(ctx, preset);
+            found_preset = TRUE;
+            break;
+        }
+    }
+    if (!found_preset) {
+        log_warning(L"No applicable preset found");
+        show_notification_message(ctx, L"No applicable preset found");
+    }
+}
+
 BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orientation) {
     if (mon->devmode.dmDisplayOrientation == orientation) {
         // No change

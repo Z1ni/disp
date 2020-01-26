@@ -31,6 +31,7 @@ int read_config(app_ctx_t *ctx, BOOL reload);
 void flag_matching_presets(app_ctx_t *ctx);
 void reload(app_ctx_t *ctx);
 void apply_preset(app_ctx_t *ctx, display_preset_t *preset);
+void apply_preset_by_name(app_ctx_t *ctx, const wchar_t *name);
 void save_current_config(app_ctx_t *ctx);
 
 #endif

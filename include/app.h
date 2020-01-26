@@ -33,6 +33,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define NOTIF_MENU_CONFIG_SELECT 0x0000E000
 #define NOTIF_MENU_CONFIG_INDEX 0x00001FFF
 
+#define IPC_APPLY_PRESET 1
+
 #define UNICODE
 #include <Windows.h>
 
@@ -50,6 +52,11 @@ typedef struct {
     int width;
     int height;
 } virt_size_t;
+
+typedef struct {
+    wchar_t preset_name[128];
+    size_t preset_name_len;
+} ipc_preset_change_request;
 
 #include "config.h"
 #include "log.h"

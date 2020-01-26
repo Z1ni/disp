@@ -293,6 +293,18 @@ static LRESULT CALLBACK main_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARA
             ctx->display_update_in_progress = FALSE;
             break;
 
+        case WM_COPYDATA:;
+            // Handle copydata
+            COPYDATASTRUCT *copydata = (COPYDATASTRUCT *) lparam;
+            if (copydata->dwData == IPC_APPLY_PRESET) {
+                // Change preset
+                ipc_preset_change_request *req = (ipc_preset_change_request *) copydata->lpData;
+                log_info(L"Got preset change request, requested preset: \"%s\"", req->preset_name);
+
+                apply_preset_by_name(ctx, req->preset_name);
+            }
+            break;
+
         default:
             return DefWindowProc(hwnd, umsg, wparam, lparam);
     }
@@ -310,7 +322,7 @@ HWND init_main_window(app_ctx_t *ctx) {
     wcex.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
     wcex.hbrBackground = (HBRUSH) GetStockObject(WHITE_BRUSH);
-    wcex.lpszClassName = L"WinClass";
+    wcex.lpszClassName = L"Zini.Disp.MainWinClass";
 
     if (!RegisterClassEx(&wcex)) {
         int err = GetLastError();
@@ -321,8 +333,8 @@ HWND init_main_window(app_ctx_t *ctx) {
         return NULL;
     }
 
-    HWND hwnd = CreateWindow(L"WinClass", APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 500, 100, NULL,
-                             NULL, h_inst, NULL);
+    HWND hwnd = CreateWindow(L"Zini.Disp.MainWinClass", APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+                             500, 100, NULL, NULL, h_inst, NULL);
     if (!hwnd) {
         int err = GetLastError();
         log_error(L"CreateWindow failed: %ld", err);

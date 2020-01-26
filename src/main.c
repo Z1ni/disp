@@ -22,6 +22,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "ui.h"
 #include "disp.h"
 
+static void print_help(wchar_t **argv) {
+    wprintf(L"Usage: %s [OPTIONS]\n\n");
+
+    wprintf(L"disp - Simple display settings manager for Windows 7+\n");
+    wprintf(L"Copyright (C) 2019-2020 Mark \"zini\" Mäkinen\n\n");
+
+    wprintf(L"Options:\n");
+    wprintf(L"  -h, --help         Print (this) help\n");
+    wprintf(L"  -p, --preset name  Apply preset with the given name. If there is an another\n");
+    wprintf(L"                     disp process running, it will perform the change and the\n");
+    wprintf(L"                     commanding process will exit immediately. Otherwise the\n");
+    wprintf(L"                     started process will perform the change and keep running.\n");
+    wprintf(L"  -v, --verbose      Verbose output: log all messages to stdout\n");
+    wprintf(L"  -l                 Log to file: log all messages to \"disp.log\"\n");
+    wprintf(L"  -V, --version      Print version information and exit\n");
+}
+
 int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, int n_show_cmd) {
 
     log_set_level(LOG_WARNING);
@@ -31,20 +48,33 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     wchar_t **argv = NULL;
     argv = CommandLineToArgvW(GetCommandLine(), &argc);
 
+    wchar_t *apply_preset_name = NULL;
+
     for (int i = 1; i < argc; i++) {
-        if (wcscmp(argv[i], L"-v") == 0) {
+        if (wcscmp(argv[i], L"-p") == 0 || wcscmp(argv[i], L"--preset") == 0) {
+            // Preset
+            // A preset name should follow
+            if (i + 1 >= argc) {
+                // No preset name
+                wprintf(L"Missing preset name\n");
+                print_help(argv);
+                return 1;
+            }
+            // Read preset name
+            apply_preset_name = _wcsdup(argv[++i]);
+        } else if (wcscmp(argv[i], L"-v") == 0 || wcscmp(argv[i], L"--verbose") == 0) {
             // Verbose
             log_set_level(LOG_TRACE);
         } else if (wcscmp(argv[i], L"-l") == 0) {
             // Create logfile
             log_set_file_level(LOG_TRACE);
-        } else if (wcscmp(argv[i], L"-V") == 0) {
+        } else if (wcscmp(argv[i], L"-V") == 0 || wcscmp(argv[i], L"--version") == 0) {
             // Version
             wprintf(APP_NAME L" " APP_VER L"\n");
             return 0;
-        } else if (wcscmp(argv[i], L"-h") == 0) {
+        } else if (wcscmp(argv[i], L"-h") == 0 || wcscmp(argv[i], L"--help") == 0) {
             // Help
-            wprintf(L"Usage: %s [-hvlV]\n", argv[0]);
+            print_help(argv);
             return 0;
         }
     }
@@ -54,6 +84,30 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     // Check if an instance is already running
     HANDLE instance_mutex = CreateMutex(NULL, FALSE, L"Zini.Disp");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        // An instance is running
+        // Check if we have a message to send to it
+        if (apply_preset_name != NULL) {
+            // We should apply a preset
+            log_info(L"Requesting the running process to change the preset to \"%s\"", apply_preset_name);
+            // Find out the running instance window
+            HWND existing_main_wnd = FindWindow(L"Zini.Disp.MainWinClass", APP_NAME);
+            if (existing_main_wnd == NULL) {
+                log_error(L"No running instance found even though mutex exists");
+                return 1;
+            }
+            // Send a message to the existing main window
+            ipc_preset_change_request change_req = {0};
+            StringCbCopy(change_req.preset_name, sizeof(change_req.preset_name), apply_preset_name);
+            change_req.preset_name_len = wcsnlen_s(apply_preset_name, 127);
+
+            COPYDATASTRUCT copydata = {0};
+            copydata.dwData = IPC_APPLY_PRESET;
+            copydata.cbData = sizeof(ipc_preset_change_request);
+            copydata.lpData = &change_req;
+
+            SendMessage(existing_main_wnd, WM_COPYDATA, (WPARAM) NULL, (LPARAM)(LPVOID) &copydata);
+            log_info(L"Sent preset change request to the running process");
+        }
         log_info(L"An instance is already running, exiting");
         return 0;
     }
@@ -124,6 +178,12 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     }
 
     log_info(L"Ready");
+
+    if (apply_preset_name != NULL) {
+        // Apply a preset
+        log_info(L"Preset change requested, preset name: \"%s\"", apply_preset_name);
+        apply_preset_by_name(&app_context, apply_preset_name);
+    }
 
     // Init OK, start main message loop
     MSG msg;

@@ -23,10 +23,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "disp.h"
 
 static void print_help(wchar_t **argv) {
-    wprintf(L"Usage: %s [OPTIONS]\n\n");
+    wprintf(L"Usage: %s [OPTIONS]\n\n", argv[0]);
 
     wprintf(L"disp - Simple display settings manager for Windows 7+\n");
-    wprintf(L"Copyright (C) 2019-2020 Mark \"zini\" Mäkinen\n\n");
+    wprintf(L"Copyright (C) 2019-2020 Mark \"zini\" M\xC3\xA4kinen\n\n");
 
     wprintf(L"Options:\n");
     wprintf(L"  -h, --help         Print (this) help\n");

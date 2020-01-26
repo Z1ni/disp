@@ -51,9 +51,6 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     LocalFree(argv);
 
-    // Init logging
-    log_init();
-
     // Check if an instance is already running
     HANDLE instance_mutex = CreateMutex(NULL, FALSE, L"Zini.Disp");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
@@ -75,6 +72,9 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
         // TODO: MessageBox
         return 1;
     }
+
+    // Init logging. All logging messages before this are not written to a file.
+    log_init();
 
     log_info(L"Initializing");
 
@@ -101,6 +101,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
             MessageBox(hwnd, L"Could not create a config file", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
             DestroyWindow(hwnd);
             ReleaseMutex(app_context.instance_mutex);
+            log_finish();
             return 1;
         }
         log_info(L"Config file was created");
@@ -109,6 +110,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     if (read_config(&app_context, FALSE) != 0) {
         DestroyWindow(hwnd);
         ReleaseMutex(app_context.instance_mutex);
+        log_finish();
         return 1;
     }
 

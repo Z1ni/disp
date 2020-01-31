@@ -30,6 +30,7 @@ static void print_help(wchar_t **argv) {
 
     wprintf(L"Options:\n");
     wprintf(L"  -h, --help         Print (this) help\n");
+    wprintf(L"  -c, --config path  Use the given config file\n");
     wprintf(L"  -p, --preset name  Apply preset with the given name. If there is an another\n");
     wprintf(L"                     disp process running, it will perform the change and the\n");
     wprintf(L"                     commanding process will exit immediately. Otherwise the\n");
@@ -48,10 +49,22 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     wchar_t **argv = NULL;
     argv = CommandLineToArgvW(GetCommandLine(), &argc);
 
+    wchar_t *config_file_path = NULL;
     wchar_t *apply_preset_name = NULL;
 
     for (int i = 1; i < argc; i++) {
-        if (wcscmp(argv[i], L"-p") == 0 || wcscmp(argv[i], L"--preset") == 0) {
+        if (wcscmp(argv[i], L"-c") == 0 || wcscmp(argv[i], L"--config") == 0) {
+            // Config file path
+            // A file path should follow
+            if (i + 1 >= argc) {
+                // No file path
+                wprintf(L"Missing config file path\n");
+                print_help(argv);
+                return 1;
+            }
+            // Read config path
+            config_file_path = _wcsdup(argv[++i]);
+        } else if (wcscmp(argv[i], L"-p") == 0 || wcscmp(argv[i], L"--preset") == 0) {
             // Preset
             // A preset name should follow
             if (i + 1 >= argc) {
@@ -107,6 +120,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
             SendMessage(existing_main_wnd, WM_COPYDATA, (WPARAM) NULL, (LPARAM)(LPVOID) &copydata);
             log_info(L"Sent preset change request to the running process");
+            free(apply_preset_name);
         }
         log_info(L"An instance is already running, exiting");
         return 0;
@@ -146,10 +160,15 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     // Populate display data
     populate_display_data(&app_context);
 
+    if (config_file_path == NULL) {
+        config_file_path = _wcsdup(L"disp.cfg");
+    }
+    log_debug(L"Using config file: %s", config_file_path);
+
     // Check if a config file exists
-    if (!PathFileExists(L"disp.cfg")) {
+    if (!PathFileExists(config_file_path)) {
         // No config exists, create a config file
-        if (disp_config_save_file("disp.cfg", &app_context.config) != DISP_CONFIG_SUCCESS) {
+        if (disp_config_save_file(config_file_path, &app_context.config) != DISP_CONFIG_SUCCESS) {
             // Config file creation failed
             log_error(L"Could not create a config file: %s", disp_config_get_err_msg(&app_context.config));
             MessageBox(hwnd, L"Could not create a config file", APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
@@ -161,12 +180,14 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
         log_info(L"Config file was created");
     }
 
+    app_context.config_file_path = _wcsdup(config_file_path);
     if (read_config(&app_context, FALSE) != 0) {
         DestroyWindow(hwnd);
         ReleaseMutex(app_context.instance_mutex);
         log_finish();
         return 1;
     }
+    free(config_file_path);
 
     flag_matching_presets(&app_context);
 
@@ -183,6 +204,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
         // Apply a preset
         log_info(L"Preset change requested, preset name: \"%s\"", apply_preset_name);
         apply_preset_by_name(&app_context, apply_preset_name);
+        free(apply_preset_name);
     }
 
     // Init OK, start main message loop
@@ -195,6 +217,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     log_info(L"Cleaning up");
     free_monitors(&app_context);
     disp_config_destroy(&app_context.config);
+    free(app_context.config_file_path);
     ReleaseMutex(app_context.instance_mutex);
 
     log_info(L"Exiting");

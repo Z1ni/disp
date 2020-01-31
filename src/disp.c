@@ -249,7 +249,7 @@ int read_config(app_ctx_t *ctx, BOOL reload) {
         disp_config_destroy(&(ctx->config));
     }
     log_info(L"Reading config");
-    if (disp_config_read_file("disp.cfg", &(ctx->config)) != DISP_CONFIG_SUCCESS) {
+    if (disp_config_read_file(ctx->config_file_path, &(ctx->config)) != DISP_CONFIG_SUCCESS) {
         wchar_t err_msg[1024] = {0};
         StringCbPrintf((wchar_t *) &err_msg, 1024, L"Could not read configuration file:\n%s",
                        disp_config_get_err_msg(&(ctx->config)));
@@ -474,7 +474,7 @@ void save_current_config(app_ctx_t *ctx) {
         return;
     }
     // Preset created, save
-    if (disp_config_save_file("disp.cfg", &(ctx->config)) != DISP_CONFIG_SUCCESS) {
+    if (disp_config_save_file(ctx->config_file_path, &(ctx->config)) != DISP_CONFIG_SUCCESS) {
         // Failed
         wchar_t err_msg[600] = {0};
         StringCbPrintf((wchar_t *) err_msg, 600, L"Preset was created, but saving it failed:\n%s",

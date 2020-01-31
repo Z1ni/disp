@@ -54,8 +54,8 @@ typedef struct {
 #include "context.h"
 #include "app.h"
 
-int disp_config_read_file(const char *path, app_config_t *config);
-int disp_config_save_file(const char *path, app_config_t *config);
+int disp_config_read_file(const wchar_t *path, app_config_t *config);
+int disp_config_save_file(const wchar_t *path, app_config_t *config);
 int disp_config_get_presets(const app_config_t *config,
                             display_preset_t ***presets); // returns count of presets or error
 wchar_t *disp_config_get_err_msg(const app_config_t *config);

@@ -24,6 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 typedef struct {
     HINSTANCE hinstance;
     app_config_t config;
+    wchar_t *config_file_path;
     virt_size_t display_virtual_size;
     HMENU notif_menu;
     GUID notify_guid;

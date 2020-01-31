@@ -103,10 +103,12 @@ static void set_error_info(app_config_t *app_config, const config_t *libconfig_c
     log_error(L"libconfig error: %s", combined_err_str);
 }
 
-int disp_config_read_file(const char *path, app_config_t *app_config) {
+int disp_config_read_file(const wchar_t *wpath, app_config_t *app_config) {
     config_t conf;
 
     config_init(&conf);
+
+    const char *path = wcstombs_alloc(wpath, NULL);
 
     if (config_read_file(&conf, path) == CONFIG_FALSE) {
         // Fail
@@ -185,7 +187,9 @@ int disp_config_read_file(const char *path, app_config_t *app_config) {
     return DISP_CONFIG_SUCCESS;
 }
 
-int disp_config_save_file(const char *path, app_config_t *app_config) {
+int disp_config_save_file(const wchar_t *wpath, app_config_t *app_config) {
+    const char *path = wcstombs_alloc(wpath, NULL);
+
     // Create config_t
     config_t config = {0};
 

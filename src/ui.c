@@ -24,23 +24,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "config.h"
 #include "resource.h"
 #include "disp.h"
+#include "util.h"
 
 LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
-
-void get_error_msg(const int err_code, wchar_t **out_msg) {
-    int fm = FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                           NULL, err_code, 0, (LPWSTR) out_msg, 0, NULL);
-    if (fm == 0) {
-        log_error(L"FormatMessage failed with error 0x%08X", GetLastError());
-        *out_msg = NULL;
-    } else {
-        // Remove trailing "\r\n"
-        wchar_t *newline_pos = wcsstr(*out_msg, L"\r\n");
-        if (newline_pos != NULL) {
-            *newline_pos = '\0';
-        }
-    }
-}
 
 void create_tray_menu(app_ctx_t *ctx) {
     // Create tray notification menu

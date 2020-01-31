@@ -61,5 +61,6 @@ typedef struct {
 
 #include "config.h"
 #include "log.h"
+#include "util.h"
 
 #endif

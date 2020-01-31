@@ -21,10 +21,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <windowsx.h>
 #include "app.h"
 #include "ui.h"
-#include "config.h"
 #include "resource.h"
 #include "disp.h"
-#include "util.h"
 
 LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
 

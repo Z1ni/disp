@@ -21,7 +21,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "app.h"
 #include "ui.h"
 #include "disp.h"
-#include "util.h"
 
 static void print_help(wchar_t **argv) {
     wprintf(L"Usage: %s [OPTIONS]\n\n", argv[0]);

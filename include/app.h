@@ -34,6 +34,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define NOTIF_MENU_CONFIG_INDEX 0x00001FFF
 
 #define IPC_APPLY_PRESET 1
+#define TIMER_RETRY_TRAY 1
 
 #define UNICODE
 #include <Windows.h>

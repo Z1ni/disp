@@ -33,6 +33,6 @@ void show_save_dialog(app_ctx_t *ctx, preset_dialog_data_t *data);
 HWND init_main_window(app_ctx_t *ctx);
 int init_virt_desktop_window(app_ctx_t *ctx);
 HWND show_virt_desktop_window(app_ctx_t *ctx);
-int create_tray_icon(app_ctx_t *ctx, HWND hwnd);
+int create_tray_icon(app_ctx_t *ctx);
 
 #endif

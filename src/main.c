@@ -155,7 +155,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     init_virt_desktop_window(&app_context);
 
     // Create tray icon
-    create_tray_icon(&app_context, hwnd);
+    create_tray_icon(&app_context);
 
     // Populate display data
     populate_display_data(&app_context);

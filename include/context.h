@@ -28,6 +28,7 @@ typedef struct {
     virt_size_t display_virtual_size;
     HMENU notif_menu;
     GUID notify_guid;
+    UINT tray_creation_retries;
     HWND main_window_hwnd;
     BOOL display_update_in_progress;
     HANDLE instance_mutex;

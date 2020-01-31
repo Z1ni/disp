@@ -305,6 +305,23 @@ static LRESULT CALLBACK main_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARA
             }
             break;
 
+        case WM_TIMER:;
+            // Timer expired
+            if (wparam == TIMER_RETRY_TRAY) {
+                // Try to create the tray icon again
+                // Fail after 10 retries
+                create_tray_icon(ctx);
+                ctx->tray_creation_retries++;
+                if (ctx->tray_creation_retries > 8) {
+                    KillTimer(ctx->main_window_hwnd, TIMER_RETRY_TRAY);
+                    log_error(L"Tray icon creation failed 10 times, bailing out");
+                    MessageBox(NULL, L"Tray icon creation failed too many times, quitting", APP_NAME,
+                               MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+                    DestroyWindow(ctx->main_window_hwnd);
+                }
+            }
+            break;
+
         default:
             return DefWindowProc(hwnd, umsg, wparam, lparam);
     }
@@ -465,13 +482,13 @@ HWND show_virt_desktop_window(app_ctx_t *ctx) {
     return hwnd;
 }
 
-int create_tray_icon(app_ctx_t *ctx, HWND hwnd) {
+int create_tray_icon(app_ctx_t *ctx) {
     // Create GUID for the icon
     CoCreateGuid(&ctx->notify_guid);
 
     NOTIFYICONDATA nid = {0};
     nid.cbSize = sizeof(NOTIFYICONDATA);
-    nid.hWnd = hwnd;
+    nid.hWnd = ctx->main_window_hwnd;
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_GUID | NIF_SHOWTIP;
     nid.guidItem = ctx->notify_guid;
     nid.uVersion = NOTIFYICON_VERSION_4;
@@ -483,10 +500,14 @@ int create_tray_icon(app_ctx_t *ctx, HWND hwnd) {
     if (!ret) {
         int err = GetLastError();
         log_error(L"Shell_NotifyIcon failed: %ld", err);
-        wchar_t err_str[100];
-        StringCbPrintf(err_str, 100, L"Shell_NotifyIcon failed: %ld", err);
-        MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
-        DestroyWindow(hwnd);
+
+        // Schedule a retry after 1 second
+        if (SetTimer(ctx->main_window_hwnd, TIMER_RETRY_TRAY, 1000, NULL) == 0) {
+            err = GetLastError();
+            log_error(L"SetTimer failed: %ld", err);
+            DestroyWindow(ctx->main_window_hwnd);
+            return 1;
+        }
         return 1;
     }
     Shell_NotifyIcon(NIM_SETVERSION, &nid);

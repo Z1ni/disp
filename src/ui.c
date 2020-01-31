@@ -24,7 +24,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "resource.h"
 #include "disp.h"
 
-LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
+const LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
+
+const COLORREF align_pattern_colors[6] = {RGB(249, 135, 78), RGB(250, 199, 88),  RGB(140, 199, 136),
+                                          RGB(83, 179, 166), RGB(102, 145, 204), RGB(197, 135, 196)};
+const size_t align_pattern_color_count = sizeof(align_pattern_colors) / sizeof(COLORREF);
 
 void create_tray_menu(app_ctx_t *ctx) {
     // Create tray notification menu
@@ -400,9 +404,6 @@ static LRESULT CALLBACK virt_desktop_wnd_proc(HWND hwnd, UINT umsg, WPARAM wpara
 
     RECT r;
     HBRUSH brush = GetStockBrush(DC_BRUSH);
-    COLORREF colors[6] = {RGB(249, 135, 78), RGB(250, 199, 88),  RGB(140, 199, 136),
-                          RGB(83, 179, 166), RGB(102, 145, 204), RGB(197, 135, 196)};
-    size_t color_count = sizeof(colors) / sizeof(COLORREF);
     int cur_color = 0;
     int row_first_color = 0;
 
@@ -420,13 +421,13 @@ static LRESULT CALLBACK virt_desktop_wnd_proc(HWND hwnd, UINT umsg, WPARAM wpara
             for (int y = 0; y < ctx->display_virtual_size.height; y += 100) {
                 for (int x = 0; x < ctx->display_virtual_size.width; x += 100) {
                     if (x == 0) {
-                        cur_color = (row_first_color + 1) % color_count;
+                        cur_color = (row_first_color + 1) % align_pattern_color_count;
                         row_first_color = cur_color;
                     }
-                    SetDCBrushColor(hdc, colors[cur_color]);
+                    SetDCBrushColor(hdc, align_pattern_colors[cur_color]);
                     SetRect(&r, x, y, x + 100, y + 100);
                     FillRect(hdc, &r, brush);
-                    cur_color = (cur_color + 1) % color_count;
+                    cur_color = (cur_color + 1) % align_pattern_color_count;
                 }
             }
 

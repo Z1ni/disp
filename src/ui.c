@@ -401,31 +401,38 @@ static LRESULT CALLBACK virt_desktop_wnd_proc(HWND hwnd, UINT umsg, WPARAM wpara
     HDC hdc;
 
     RECT r;
-    HBRUSH black = GetStockBrush(BLACK_BRUSH);
-    HBRUSH white = GetStockBrush(WHITE_BRUSH);
-    HBRUSH *brushes[2] = {&black, &white};
-    int cur_brush = 0;
-    int row_first_brush = 0;
+    HBRUSH brush = GetStockBrush(DC_BRUSH);
+    COLORREF colors[6] = {RGB(249, 135, 78), RGB(250, 199, 88),  RGB(140, 199, 136),
+                          RGB(83, 179, 166), RGB(102, 145, 204), RGB(197, 135, 196)};
+    size_t color_count = sizeof(colors) / sizeof(COLORREF);
+    int cur_color = 0;
+    int row_first_color = 0;
+
+    RECT text_rect;
+    SetRect(&text_rect, 10, 10, 500, 100);
 
     switch (umsg) {
         case WM_PAINT:;
             hdc = BeginPaint(hwnd, &ps);
 
-            // Draw checkerboard pattern
-            cur_brush = 0;
+            SelectObject(hdc, ctx->align_pattern_font);
+
+            // Draw shifting color pattern
+            cur_color = -1;
             for (int y = 0; y < ctx->display_virtual_size.height; y += 100) {
                 for (int x = 0; x < ctx->display_virtual_size.width; x += 100) {
                     if (x == 0) {
-                        row_first_brush = cur_brush;
+                        cur_color = (row_first_color + 1) % color_count;
+                        row_first_color = cur_color;
                     }
+                    SetDCBrushColor(hdc, colors[cur_color]);
                     SetRect(&r, x, y, x + 100, y + 100);
-                    FillRect(hdc, &r, *(brushes[cur_brush]));
-                    cur_brush = (cur_brush + 1) % 2;
-                }
-                if (row_first_brush == cur_brush) {
-                    cur_brush = (cur_brush + 1) % 2;
+                    FillRect(hdc, &r, brush);
+                    cur_color = (cur_color + 1) % color_count;
                 }
             }
+
+            DrawText(hdc, L"Press any key to close", -1, &text_rect, DT_LEFT);
 
             EndPaint(hwnd, &ps);
             break;
@@ -470,6 +477,10 @@ int init_virt_desktop_window(app_ctx_t *ctx) {
         LocalFree(err_msg);
         return 1;
     }
+
+    // Use 32em Arial in the align pattern window help text
+    ctx->align_pattern_font = CreateFont(32, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_ONLY_PRECIS,
+                                         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Arial");
 
     return 0;
 }

@@ -227,6 +227,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     free_monitors(&app_context);
     disp_config_destroy(&app_context.config);
     free(app_context.config_file_path);
+    DeleteObject(app_context.align_pattern_font);
     ReleaseMutex(app_context.instance_mutex);
 
     log_info(L"Exiting");

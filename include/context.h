@@ -35,6 +35,7 @@ typedef struct {
     size_t monitor_count;
     monitor_t *monitors;
     POINTL min_monitor_pos;
+    HFONT align_pattern_font;
 } app_ctx_t;
 
 #endif

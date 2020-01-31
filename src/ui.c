@@ -27,6 +27,21 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 LPTSTR orientation_str[4] = {L"Landscape", L"Portrait", L"Landscape (flipped)", L"Portrait (flipped)"};
 
+void get_error_msg(const int err_code, wchar_t **out_msg) {
+    int fm = FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                           NULL, err_code, 0, (LPWSTR) out_msg, 0, NULL);
+    if (fm == 0) {
+        log_error(L"FormatMessage failed with error 0x%08X", GetLastError());
+        *out_msg = NULL;
+    } else {
+        // Remove trailing "\r\n"
+        wchar_t *newline_pos = wcsstr(*out_msg, L"\r\n");
+        if (newline_pos != NULL) {
+            *newline_pos = '\0';
+        }
+    }
+}
+
 void create_tray_menu(app_ctx_t *ctx) {
     // Create tray notification menu
 
@@ -131,11 +146,15 @@ static LRESULT CALLBACK save_dialog_proc(HWND hwnd, UINT umsg, WPARAM wparam, LP
                     // Get name from the text field
                     if (GetDlgItemText(hwnd, IDC_PRESET_NAME, res_name, 64) == 0) {
                         // Failed
-                        wchar_t msg[100] = {0};
-                        StringCbPrintf((wchar_t *) msg, 100, L"Failed to get dialog name string: 0x%08X",
-                                       GetLastError());
+                        int err = GetLastError();
+                        wchar_t *err_msg = NULL;
+                        get_error_msg(err, &err_msg);
+                        wchar_t msg[200] = {0};
+                        StringCbPrintf((wchar_t *) msg, 200, L"Failed to get dialog name string: %s (0x%08X)", err_msg,
+                                       err);
                         log_error(msg);
                         MessageBox(hwnd, msg, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+                        LocalFree(err_msg);
                         EndDialog(hwnd, wparam);
                         return TRUE;
                     }
@@ -180,7 +199,11 @@ static LRESULT CALLBACK main_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARA
             nid.guidItem = ctx->notify_guid;
             BOOL ret = Shell_NotifyIcon(NIM_DELETE, &nid);
             if (!ret) {
-                log_error(L"Couldn't delete notifyicon, error %ld", GetLastError());
+                wchar_t *err_msg = NULL;
+                int err = GetLastError();
+                get_error_msg(err, &err_msg);
+                log_error(L"Couldn't delete notifyicon: %s (0x%08X)", err_msg, err);
+                LocalFree(err_msg);
             }
             DestroyMenu(ctx->notif_menu);
             PostQuitMessage(0);
@@ -196,10 +219,14 @@ static LRESULT CALLBACK main_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARA
                     SetForegroundWindow(hwnd);
                     // Show popup menu
                     if (!TrackPopupMenuEx(ctx->notif_menu, 0, menu_x, menu_y, hwnd, NULL)) {
-                        wchar_t err_str[100];
-                        StringCbPrintf(err_str, 100, L"TrackPopupMenuEx failed: %ld", GetLastError());
+                        wchar_t *err_msg = NULL;
+                        int err = GetLastError();
+                        get_error_msg(err, &err_msg);
+                        wchar_t err_str[200];
+                        StringCbPrintf(err_str, 200, L"TrackPopupMenuEx failed: %s (0x%08X)", err_msg, err);
                         log_error(err_str);
                         MessageBoxW(hwnd, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+                        LocalFree(err_msg);
                     }
                     break;
             }
@@ -343,10 +370,13 @@ HWND init_main_window(app_ctx_t *ctx) {
 
     if (!RegisterClassEx(&wcex)) {
         int err = GetLastError();
-        log_error(L"RegisterClassEx failed: %ld", err);
-        wchar_t err_str[100];
-        StringCbPrintf(err_str, 100, L"RegisterClassEx failed: %ld", err);
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"RegisterClassEx failed: %s (0x%08X)", err_msg, err);
+        wchar_t err_str[200];
+        StringCbPrintf(err_str, 200, L"RegisterClassEx failed: %s (0x%08X)", err_msg, err);
         MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        LocalFree(err_msg);
         return NULL;
     }
 
@@ -354,10 +384,13 @@ HWND init_main_window(app_ctx_t *ctx) {
                              500, 100, NULL, NULL, h_inst, NULL);
     if (!hwnd) {
         int err = GetLastError();
-        log_error(L"CreateWindow failed: %ld", err);
-        wchar_t err_str[100];
-        StringCbPrintf(err_str, 100, L"CreateWindowW failed: %ld", err);
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"CreateWindow failed: %s (0x%08X)", err_msg, err);
+        wchar_t err_str[200];
+        StringCbPrintf(err_str, 200, L"CreateWindowW failed: %s (0x%08X)", err_msg, err);
         MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        LocalFree(err_msg);
         return NULL;
     }
     // Set app context as the window user data so the window procedure can access the context without global variables
@@ -442,10 +475,13 @@ int init_virt_desktop_window(app_ctx_t *ctx) {
 
     if (!RegisterClassEx(&wcex)) {
         int err = GetLastError();
-        log_error(L"RegisterClassEx failed for virtual desktop window: %ld", err);
-        wchar_t err_str[100];
-        StringCbPrintf(err_str, 100, L"RegisterClassEx failed: %ld", err);
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"RegisterClassEx failed for virtual desktop window: %s (0x%08X)", err_msg, err);
+        wchar_t err_str[200];
+        StringCbPrintf(err_str, 200, L"RegisterClassEx failed: %s (0x%08X)", err_msg, err);
         MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        LocalFree(err_msg);
         return 1;
     }
 
@@ -463,10 +499,13 @@ HWND show_virt_desktop_window(app_ctx_t *ctx) {
 
     if (!hwnd) {
         int err = GetLastError();
-        log_error(L"CreateWindow failed for virtual desktop window: %ld", err);
-        wchar_t err_str[100];
-        StringCbPrintf(err_str, 100, L"CreateWindowW failed: %ld", err);
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"CreateWindowEx failed for virtual desktop window: %s (0x%08X)", err_msg, err);
+        wchar_t err_str[200];
+        StringCbPrintf(err_str, 200, L"CreateWindowEx failed: %s (0x%08X)", err_msg, err);
         MessageBox(NULL, (LPCWSTR) err_str, APP_NAME, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+        LocalFree(err_msg);
         return NULL;
     }
 
@@ -499,12 +538,18 @@ int create_tray_icon(app_ctx_t *ctx) {
     BOOL ret = Shell_NotifyIcon(NIM_ADD, &nid);
     if (!ret) {
         int err = GetLastError();
-        log_error(L"Shell_NotifyIcon failed: %ld", err);
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+
+        log_error(L"Shell_NotifyIcon failed: %s (0x08X)", err_msg, err);
+        LocalFree(err_msg);
 
         // Schedule a retry after 1 second
         if (SetTimer(ctx->main_window_hwnd, TIMER_RETRY_TRAY, 1000, NULL) == 0) {
             err = GetLastError();
-            log_error(L"SetTimer failed: %ld", err);
+            get_error_msg(err, &err_msg);
+            log_error(L"SetTimer failed: %s (0x08X)", err_msg, err);
+            LocalFree(err_msg);
             DestroyWindow(ctx->main_window_hwnd);
             return 1;
         }

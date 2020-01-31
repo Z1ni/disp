@@ -132,11 +132,19 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
             if (!instance_mutex) {
                 // Failed
                 // TODO: MessageBox
-                log_error(L"Failed to open mutex: 0x%04X", GetLastError());
+                int err = GetLastError();
+                wchar_t *err_msg;
+                get_error_msg(err, &err_msg);
+                log_error(L"Failed to open mutex: %s (0x%08X)", err_msg, err);
+                LocalFree(err_msg);
                 return 1;
             }
         }
-        log_error(L"Could not create app mutex: 0x%04X", GetLastError());
+        int err = GetLastError();
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"Could not create app mutex: %s (0x%08X)", err_msg, err);
+        LocalFree(err_msg);
         // TODO: MessageBox
         return 1;
     }

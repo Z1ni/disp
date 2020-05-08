@@ -17,10 +17,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #define UNICODE
+#include <shlwapi.h>
 #include <stdlib.h>
 #include <string.h>
 #include <Windows.h>
 #include <Strsafe.h>
+#include <shlobj.h>
 #include "config.h"
 #include "log.h"
 
@@ -101,6 +103,61 @@ static void set_error_info(app_config_t *app_config, const config_t *libconfig_c
 
     // Log
     log_error(L"libconfig error: %s", combined_err_str);
+}
+
+int disp_config_get_appdata_path(wchar_t **config_path_out) {
+    wchar_t conf_path[MAX_PATH] = {0};
+
+    // Get local AppData folder path
+    HRESULT path_result = SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, conf_path);
+    if (FAILED(path_result)) {
+        int err = GetLastError();
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"Failed to get local AppData path: %s (0x%08X)", err_msg, err);
+        LocalFree(err_msg);
+        return DISP_CONFIG_ERROR_GENERAL;
+    }
+
+    // TODO: Get default config path from a define or something like that
+    if (!PathAppend((wchar_t *) conf_path, L"Zini.Disp")) {
+        // Failure
+        int err = GetLastError();
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"Failed to append to AppData path: %s (0x%08X)", err_msg, err);
+        LocalFree(err_msg);
+        return DISP_CONFIG_ERROR_GENERAL;
+    }
+    // Create the directory if needed
+    if (!CreateDirectory(conf_path, NULL)) {
+        int err = GetLastError();
+        if (err != ERROR_ALREADY_EXISTS) {
+            int err = GetLastError();
+            wchar_t *err_msg;
+            get_error_msg(err, &err_msg);
+            log_error(L"Failed to create local AppData directory: %s (0x%08X)", err_msg, err);
+            LocalFree(err_msg);
+            return DISP_CONFIG_ERROR_GENERAL;
+        }
+    }
+
+    // Append the config filename
+    if (!PathAppend((wchar_t *) conf_path, L"disp.cfg")) {
+        // Failure
+        int err = GetLastError();
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"Failed to append to config path: %s (0x%08X)", err_msg, err);
+        LocalFree(err_msg);
+        return DISP_CONFIG_ERROR_GENERAL;
+    }
+    // Copy the path to a dynamically allocated buffer
+    // The caller is responsible for freeing the memory
+    wchar_t *dyn_config_path = _wcsdup((wchar_t *) conf_path);
+    *config_path_out = dyn_config_path;
+
+    return DISP_CONFIG_SUCCESS;
 }
 
 int disp_config_read_file(const wchar_t *wpath, app_config_t *app_config) {

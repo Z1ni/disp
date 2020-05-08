@@ -54,6 +54,7 @@ typedef struct {
 #include "context.h"
 #include "app.h"
 
+int disp_config_get_appdata_path(wchar_t **config_path_out);
 int disp_config_read_file(const wchar_t *path, app_config_t *config);
 int disp_config_save_file(const wchar_t *path, app_config_t *config);
 int disp_config_get_presets(const app_config_t *config,

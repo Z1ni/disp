@@ -1,5 +1,5 @@
 obj/
 bin/
-disp.cfg
+disp_config.json
 *.res
 .vscode/

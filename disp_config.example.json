@@ -1,0 +1,36 @@
+{
+    "app": {
+        "notify_on_start": false
+    },
+    "presets": [
+        {
+            "name": "Example",
+            "displays": [
+                {
+                    "display": "\\\\?\\DISPLAY#AAAAAAA#4&12345678&0&UID1234#{guid-guid-guid-guid-guid}",
+                    "orientation": 0,
+                    "position": {
+                        "x": -1920,
+                        "y": 0
+                    },
+                    "resolution": {
+                        "width": 1920,
+                        "height": 1200
+                    }
+                },
+                {
+                    "display": "\\\\?\\DISPLAY#BBBBBBBB#4&87654321&0&UID1234#{guid}",
+                    "orientation": 0,
+                    "position": {
+                        "x": 0,
+                        "y": 0
+                    },
+                    "resolution": {
+                        "width": 1920,
+                        "height": 1200
+                    }
+                }
+            ]
+        }
+    ]
+}

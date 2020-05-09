@@ -23,6 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Windows.h>
 #include <Strsafe.h>
 #include <shlobj.h>
+#include <jansson.h>
 #include "config.h"
 #include "log.h"
 
@@ -64,45 +65,23 @@ static const char *wcstombs_alloc(const wchar_t *src, size_t *dest_sz) {
     return result;
 }
 
-static void set_error_info(app_config_t *app_config, const config_t *libconfig_config) {
-    // Get error info from libconfig
-    config_error_t err_type = config_error_type(libconfig_config);
-    if (err_type == CONFIG_ERR_NONE) {
+static void set_error_info(app_config_t *app_config, const json_error_t *json_err) {
+    // Get error from Jansson
+    const wchar_t *err_str = mbstowcsdup((const char *) json_err->text, NULL);
+    const wchar_t *source_str = mbstowcsdup((const char *) json_err->source, NULL);
+
+    HRESULT res = StringCbPrintf(app_config->error_str, 512, L"%s in %s at line %d, column %d", err_str, source_str,
+                                 json_err->line, json_err->column);
+
+    free((wchar_t *) err_str);
+    free((wchar_t *) source_str);
+
+    if (FAILED(res)) {
+        log_error(L"Failed to format Jansson error string");
         return;
     }
 
-    const wchar_t *w_err_str = mbstowcsdup(config_error_text(libconfig_config), NULL);
-    int err_line = config_error_line(libconfig_config);
-
-    wchar_t *w_err_file = NULL;
-    const char *err_file = config_error_file(libconfig_config);
-    if (err_file != NULL) {
-        w_err_file = mbstowcsdup(err_file, NULL);
-    }
-
-    // Set app config error info
-    // Construct the error string
-    wchar_t combined_err_str[512] = {0};
-    if (err_type == CONFIG_ERR_FILE_IO) {
-        if (w_err_file == NULL) {
-            StringCbPrintf((wchar_t *) &combined_err_str, 511, L"%s", w_err_str);
-        } else {
-            StringCbPrintf((wchar_t *) &combined_err_str, 511, L"%s in %s", w_err_str, w_err_file);
-            free(w_err_file);
-        }
-    } else {
-        if (w_err_file == NULL) {
-            StringCbPrintf((wchar_t *) &combined_err_str, 511, L"%s at line %d", w_err_str, err_line);
-        } else {
-            StringCbPrintf((wchar_t *) &combined_err_str, 511, L"%s in %s at line %d", w_err_str, w_err_file, err_line);
-            free(w_err_file);
-        }
-    }
-    free((wchar_t *) w_err_str);
-    memcpy(app_config->error_str, combined_err_str, 512);
-
-    // Log
-    log_error(L"libconfig error: %s", combined_err_str);
+    log_error(L"Jansson error: %s", app_config->error_str);
 }
 
 int disp_config_get_appdata_path(wchar_t **config_path_out) {
@@ -143,7 +122,7 @@ int disp_config_get_appdata_path(wchar_t **config_path_out) {
     }
 
     // Append the config filename
-    if (!PathAppend((wchar_t *) conf_path, L"disp.cfg")) {
+    if (!PathAppend((wchar_t *) conf_path, L"config.json")) {
         // Failure
         int err = GetLastError();
         wchar_t *err_msg;
@@ -161,75 +140,104 @@ int disp_config_get_appdata_path(wchar_t **config_path_out) {
 }
 
 int disp_config_read_file(const wchar_t *wpath, app_config_t *app_config) {
-    config_t conf;
-
-    config_init(&conf);
+    json_t *conf_root;
+    json_error_t json_err;
 
     const char *path = wcstombs_alloc(wpath, NULL);
 
-    if (config_read_file(&conf, path) == CONFIG_FALSE) {
-        // Fail
-        set_error_info(app_config, &conf);
-        config_destroy(&conf);
+    conf_root = json_load_file(path, 0, &json_err);
+    free((char *) path);
+
+    if (!conf_root) {
+        set_error_info(app_config, &json_err);
         return DISP_CONFIG_ERROR_GENERAL;
     }
 
-    if (config_lookup_bool(&conf, "app.notify_on_start", &(app_config->notify_on_start)) == CONFIG_FALSE) {
-        set_error_info(app_config, &conf);
-        config_destroy(&conf);
+    // TODO: Use JSON_STRICT when unpacking?
+
+    json_t *app_obj, *disp_presets;
+    // Validate and unpack {"app": ..., "presets": ...}
+    if (json_unpack_ex(conf_root, &json_err, 0, "{s: o, s: o}", "app", &app_obj, "presets", &disp_presets) != 0) {
+        set_error_info(app_config, &json_err);
+        json_decref(conf_root);
         return DISP_CONFIG_ERROR_GENERAL;
     }
 
-    // Get configs
-    config_setting_t *disp_presets = config_lookup(&conf, "presets");
-    if (disp_presets == NULL) {
+    // Read app.notify_on_start
+    if (json_unpack_ex(app_obj, &json_err, 0, "{s: b}", "notify_on_start", &(app_config->notify_on_start)) != 0) {
+        set_error_info(app_config, &json_err);
+        json_decref(conf_root);
         return DISP_CONFIG_ERROR_GENERAL;
     }
 
-    int disp_presets_len = config_setting_length(disp_presets);
+    // Get preset configs
+    size_t disp_presets_size = json_array_size(disp_presets);
 
-    app_config->preset_count = (size_t) disp_presets_len;
+    app_config->preset_count = disp_presets_size;
+    app_config->presets = calloc(disp_presets_size, sizeof(display_preset_t *));
 
-    app_config->presets = calloc(disp_presets_len, sizeof(display_preset_t *));
-
-    for (int i = 0; i < disp_presets_len; i++) {
+    for (size_t i = 0; i < disp_presets_size; i++) {
         display_preset_t *preset_entry = calloc(1, sizeof(display_preset_t));
         preset_entry->applicable = 0;
 
-        // config_setting_get_elem can also return NULL if the index is out of range - use it in while?
-        config_setting_t *elem = config_setting_get_elem(disp_presets, i);
-
-        // Name
-        const char *name;
-        config_setting_lookup_string(elem, "name", &name);
-        preset_entry->name = mbstowcsdup(name, NULL);
-
-        // Displays
-        config_setting_t *disp_settings = config_setting_get_member(elem, "displays");
-        if (disp_settings == NULL) {
-            // No display settings
-            // TODO: Is this free working here?
+        // Parse the preset entry
+        json_t *elem = json_array_get(disp_presets, i);
+        if (!json_is_object(elem)) {
+            log_error(L"Invalid preset type, expected object");
+            json_decref(conf_root);
             disp_config_destroy(app_config);
             return DISP_CONFIG_ERROR_GENERAL;
         }
-        int disp_settings_len = config_setting_length(disp_settings);
-        preset_entry->display_count = (size_t) disp_settings_len;
-        preset_entry->display_conf = calloc(disp_settings_len, sizeof(display_settings_t *));
 
-        for (int a = 0; a < disp_settings_len; a++) {
+        json_t *disp_settings;
+        char *temp_name;
+
+        // Validate and unpack the preset entry structure {"name": "<str>", "displays": [...]}
+        if (json_unpack_ex(elem, &json_err, 0, "{s: s, s: o}", "name", &temp_name, "displays", &disp_settings) != 0) {
+            set_error_info(app_config, &json_err);
+            json_decref(conf_root);
+            disp_config_destroy(app_config);
+            return DISP_CONFIG_ERROR_GENERAL;
+        }
+
+        preset_entry->name = mbstowcsdup(temp_name, NULL);
+
+        // Displays
+        if (!json_is_array(disp_settings)) {
+            log_error(L"Invalid display config type, expected array");
+            json_decref(conf_root);
+            disp_config_destroy(app_config);
+            return DISP_CONFIG_ERROR_GENERAL;
+        }
+
+        size_t disp_settings_size = json_array_size(disp_settings);
+        preset_entry->display_count = disp_settings_size;
+        preset_entry->display_conf = calloc(disp_settings_size, sizeof(display_settings_t *));
+
+        for (size_t a = 0; a < disp_settings_size; a++) {
             display_settings_t *display_entry = calloc(1, sizeof(display_settings_t));
 
-            config_setting_t *disp_elem = config_setting_get_elem(disp_settings, a);
-            const char *display_path;
+            json_t *disp_elem = json_array_get(disp_settings, a);
+            if (!json_is_object(disp_elem)) {
+                log_error(L"Invalid display type, expected object");
+                json_decref(conf_root);
+                disp_config_destroy(app_config);
+                return DISP_CONFIG_ERROR_GENERAL;
+            }
 
-            config_setting_lookup_string(disp_elem, "display", &display_path);
-            config_setting_lookup_int(disp_elem, "orientation", &(display_entry->orientation));
-            config_setting_t *pos = config_setting_get_member(disp_elem, "position");
-            config_setting_lookup_int(pos, "x", &(display_entry->pos_x));
-            config_setting_lookup_int(pos, "y", &(display_entry->pos_y));
-            config_setting_t *resolution = config_setting_get_member(disp_elem, "resolution");
-            config_setting_lookup_int(resolution, "width", &(display_entry->width));
-            config_setting_lookup_int(resolution, "height", &(display_entry->height));
+            // Validate and unpack the display settings
+            char *display_path;
+            int res = json_unpack_ex(disp_elem, &json_err, 0, "{s: s, s: i, s: {s: i, s: i}, s: {s: i, s: i}}",
+                                     "display", &display_path, "orientation", &(display_entry->orientation), "position",
+                                     "x", &(display_entry->pos_x), "y", &(display_entry->pos_y), "resolution", "width",
+                                     &(display_entry->width), "height", &(display_entry->height));
+
+            if (res != 0) {
+                set_error_info(app_config, &json_err);
+                json_decref(conf_root);
+                disp_config_destroy(app_config);
+                return DISP_CONFIG_ERROR_GENERAL;
+            }
 
             display_entry->device_path = mbstowcsdup(display_path, NULL);
 
@@ -239,91 +247,110 @@ int disp_config_read_file(const wchar_t *wpath, app_config_t *app_config) {
         app_config->presets[i] = preset_entry;
     }
 
-    config_destroy(&conf);
+    json_decref(conf_root);
 
     return DISP_CONFIG_SUCCESS;
 }
 
 int disp_config_save_file(const wchar_t *wpath, app_config_t *app_config) {
-    const char *path = wcstombs_alloc(wpath, NULL);
+    json_error_t json_err;
 
-    // Create config_t
-    config_t config = {0};
+    // App settings
+    json_t *app_conf = json_pack_ex(&json_err, 0, "{s: b}", "notify_on_start", app_config->notify_on_start);
+    if (!app_conf) {
+        log_error(L"Failed to pack app settings");
+        set_error_info(app_config, &json_err);
+        return DISP_CONFIG_ERROR_GENERAL;
+    }
 
-    config_init(&config);
+    // Presets
+    json_t *preset_arr = json_array();
 
-    config_setting_t *root = config_root_setting(&config);
-    config_setting_t *app_group, *presets_list, *setting;
-
-    // Create app group
-    app_group = config_setting_add(root, "app", CONFIG_TYPE_GROUP);
-
-    // Add app group settings
-    setting = config_setting_add(app_group, "notify_on_start", CONFIG_TYPE_BOOL);
-    config_setting_set_bool(setting, app_config->notify_on_start);
-
-    // Create presets list
-    presets_list = config_setting_add(root, "presets", CONFIG_TYPE_LIST);
-
-    // Add presets
     for (size_t i = 0; i < app_config->preset_count; i++) {
-        config_setting_t *preset_entry = config_setting_add(presets_list, NULL, CONFIG_TYPE_GROUP);
+        display_preset_t *preset = app_config->presets[i];
 
-        // Name
-        const char *name_str = wcstombs_alloc(app_config->presets[i]->name, NULL);
-
-        setting = config_setting_add(preset_entry, "name", CONFIG_TYPE_STRING);
-        config_setting_set_string(setting, name_str);
-
-        // libconfig copies the passed string so we can now free the converted local version
-        free((char *) name_str);
+        // Display JSON array
+        json_t *display_arr = json_array();
 
         // Displays
-        config_setting_t *displays_list = config_setting_add(preset_entry, "displays", CONFIG_TYPE_LIST);
-
-        for (size_t a = 0; a < app_config->presets[i]->display_count; a++) {
-            display_settings_t *disp_settings = app_config->presets[i]->display_conf[a];
-
-            config_setting_t *display_entry = config_setting_add(displays_list, NULL, CONFIG_TYPE_GROUP);
+        for (size_t a = 0; a < preset->display_count; a++) {
+            display_settings_t *disp_settings = preset->display_conf[a];
 
             // Display path
-            // TODO: Does this need to be escaped?
             const char *display_path = wcstombs_alloc(disp_settings->device_path, NULL);
 
-            setting = config_setting_add(display_entry, "display", CONFIG_TYPE_STRING);
-            config_setting_set_string(setting, display_path);
+            // Create the JSON object
+            json_t *display_obj = json_pack_ex(
+                &json_err, 0, "{s: s, s: i, s: {s: i, s: i}, s: {s: i, s: i}}", "display", display_path, "orientation",
+                disp_settings->orientation, "position", "x", disp_settings->pos_x, "y", disp_settings->pos_y,
+                "resolution", "width", disp_settings->width, "height", disp_settings->height);
+
             free((char *) display_path);
 
-            // Orientation
-            setting = config_setting_add(display_entry, "orientation", CONFIG_TYPE_INT);
-            config_setting_set_int(setting, disp_settings->orientation);
+            if (!display_obj) {
+                log_error(L"Failed to pack display settings");
+                set_error_info(app_config, &json_err);
+                json_decref(display_arr);
+                json_decref(preset_arr);
+                json_decref(app_conf);
+                return DISP_CONFIG_ERROR_GENERAL;
+            }
 
-            // Position
-            config_setting_t *position = config_setting_add(display_entry, "position", CONFIG_TYPE_GROUP);
-            // X
-            setting = config_setting_add(position, "x", CONFIG_TYPE_INT);
-            config_setting_set_int(setting, disp_settings->pos_x);
-            // Y
-            setting = config_setting_add(position, "y", CONFIG_TYPE_INT);
-            config_setting_set_int(setting, disp_settings->pos_y);
+            // Add the display to the display array
+            if (json_array_append_new(display_arr, display_obj) != 0) {
+                log_error(L"Failed to append to display array");
+                json_decref(display_arr);
+                json_decref(preset_arr);
+                json_decref(app_conf);
+                return DISP_CONFIG_ERROR_GENERAL;
+            }
+        }
 
-            // Resolution
-            config_setting_t *resolution = config_setting_add(display_entry, "resolution", CONFIG_TYPE_GROUP);
-            // Width
-            setting = config_setting_add(resolution, "width", CONFIG_TYPE_INT);
-            config_setting_set_int(setting, disp_settings->width);
-            // Height
-            setting = config_setting_add(resolution, "height", CONFIG_TYPE_INT);
-            config_setting_set_int(setting, disp_settings->height);
+        // Name
+        const char *name_str = wcstombs_alloc(preset->name, NULL);
+
+        // Create the preset entry and add it to the array
+        json_t *preset_entry = json_pack_ex(&json_err, 0, "{s: s, s: o}", "name", name_str, "displays", display_arr);
+        free((char *) name_str);
+
+        if (!preset_entry) {
+            log_error(L"Failed to pack preset entry");
+            set_error_info(app_config, &json_err);
+            json_decref(display_arr);
+            json_decref(preset_arr);
+            json_decref(app_conf);
+            return DISP_CONFIG_ERROR_GENERAL;
+        }
+
+        if (json_array_append(preset_arr, preset_entry) != 0) {
+            log_error(L"Failed to append to preset array");
+            json_decref(preset_entry);
+            json_decref(preset_arr);
+            json_decref(app_conf);
+            return DISP_CONFIG_ERROR_GENERAL;
         }
     }
 
-    if (config_write_file(&config, path) == CONFIG_FALSE) {
-        set_error_info(app_config, &config);
-        config_destroy(&config);
+    // Combine app settings and preset array to the root config object
+    json_t *conf_root = json_pack_ex(&json_err, 0, "{s: o, s: o}", "app", app_conf, "presets", preset_arr);
+    if (!conf_root) {
+        log_error(L"Failed to pack settings root");
+        set_error_info(app_config, &json_err);
+        json_decref(preset_arr);
+        json_decref(app_conf);
         return DISP_CONFIG_ERROR_GENERAL;
     }
-    config_destroy(&config);
+
+    // Config file path
+    const char *path = wcstombs_alloc(wpath, NULL);
+
+    if (json_dump_file(conf_root, path, JSON_INDENT(4)) != 0) {
+        log_error(L"Failed to write settings to file");
+        json_decref(conf_root);
+        return DISP_CONFIG_ERROR_IO;
+    }
+
+    json_decref(conf_root);
 
     return DISP_CONFIG_SUCCESS;
 }

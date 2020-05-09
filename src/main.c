@@ -171,14 +171,15 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     // Determine a config file path if it's not supplied in the command line arguments
     if (config_file_path == NULL) {
         // Check if there exists a config file in the current working directory
-        if (!PathFileExists(L"disp.cfg")) {
+        if (!PathFileExists(L"disp_config.json")) {
             // No local config file, default to AppData if possible
             if (disp_config_get_appdata_path(&config_file_path) != DISP_CONFIG_SUCCESS) {
-                log_warning(L"Failed to get AppData config path, using \"disp.cfg\" relative to the working directory");
-                config_file_path = _wcsdup(L"disp.cfg");
+                log_warning(
+                    L"Failed to get AppData config path, using \"disp_config.json\" relative to the working directory");
+                config_file_path = _wcsdup(L"disp_config.json");
             }
         } else {
-            config_file_path = _wcsdup(L"disp.cfg");
+            config_file_path = _wcsdup(L"disp_config.json");
         }
     }
     log_debug(L"Using config file: %s", config_file_path);

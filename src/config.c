@@ -417,8 +417,14 @@ int disp_config_create_preset(const wchar_t *name, app_ctx_t *ctx) {
 
 void disp_config_destroy(app_config_t *config) {
     if (config->preset_count > 0) {
+        if (config->presets == NULL) {
+            return;
+        }
         for (size_t i = 0; i < config->preset_count; i++) {
             display_preset_t *preset = config->presets[i];
+            if (preset == NULL) {
+                continue;
+            }
             if (preset->display_count > 0) {
                 for (size_t a = 0; a < preset->display_count; a++) {
                     free((wchar_t *) preset->display_conf[a]->device_path);

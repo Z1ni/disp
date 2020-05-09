@@ -354,7 +354,7 @@ HWND init_main_window(app_ctx_t *ctx) {
     wcex.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
     wcex.hbrBackground = (HBRUSH) GetStockObject(WHITE_BRUSH);
-    wcex.lpszClassName = L"Zini.Disp.MainWinClass";
+    wcex.lpszClassName = MAIN_WND_CLASS;
 
     if (!RegisterClassEx(&wcex)) {
         int err = GetLastError();
@@ -368,8 +368,8 @@ HWND init_main_window(app_ctx_t *ctx) {
         return NULL;
     }
 
-    HWND hwnd = CreateWindow(L"Zini.Disp.MainWinClass", APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                             500, 100, NULL, NULL, h_inst, NULL);
+    HWND hwnd = CreateWindow(MAIN_WND_CLASS, APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 500, 100,
+                             NULL, NULL, h_inst, NULL);
     if (!hwnd) {
         int err = GetLastError();
         wchar_t *err_msg;

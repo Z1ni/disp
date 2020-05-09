@@ -98,8 +98,7 @@ int disp_config_get_appdata_path(wchar_t **config_path_out) {
         return DISP_CONFIG_ERROR_GENERAL;
     }
 
-    // TODO: Get default config path from a define or something like that
-    if (!PathAppend((wchar_t *) conf_path, L"Zini.Disp")) {
+    if (!PathAppend((wchar_t *) conf_path, APP_FQN)) {
         // Failure
         int err = GetLastError();
         wchar_t *err_msg;
@@ -122,7 +121,7 @@ int disp_config_get_appdata_path(wchar_t **config_path_out) {
     }
 
     // Append the config filename
-    if (!PathAppend((wchar_t *) conf_path, L"config.json")) {
+    if (!PathAppend((wchar_t *) conf_path, APPDATA_CONFIG_NAME)) {
         // Failure
         int err = GetLastError();
         wchar_t *err_msg;

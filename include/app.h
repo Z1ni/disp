@@ -21,6 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define APP_NAME L"disp"
 #define APP_VER L"0.1.0"
+#define APP_FQN L"Zini.Disp"
 
 #define MSG_NOTIFYICON (WM_APP + 1)
 #define NOTIF_MENU_EXIT 1

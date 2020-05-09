@@ -19,6 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#define DEFAULT_CONFIG_NAME L"disp_config.json"
+#define APPDATA_CONFIG_NAME L"config.json"
+
 #define DISP_CONFIG_SUCCESS 0
 #define DISP_CONFIG_ERROR_GENERAL -1
 #define DISP_CONFIG_ERROR_IO -2

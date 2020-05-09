@@ -19,6 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef _UI_H_
 #define _UI_H_
 
+#define MAIN_WND_CLASS L"Zini.Disp.MainWinClass"
+
 #include <strsafe.h>
 #include "context.h"
 

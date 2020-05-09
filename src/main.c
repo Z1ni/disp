@@ -95,7 +95,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     LocalFree(argv);
 
     // Check if an instance is already running
-    HANDLE instance_mutex = CreateMutex(NULL, FALSE, L"Zini.Disp");
+    HANDLE instance_mutex = CreateMutex(NULL, FALSE, APP_FQN);
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         // An instance is running
         // Check if we have a message to send to it
@@ -103,7 +103,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
             // We should apply a preset
             log_info(L"Requesting the running process to change the preset to \"%s\"", apply_preset_name);
             // Find out the running instance window
-            HWND existing_main_wnd = FindWindow(L"Zini.Disp.MainWinClass", APP_NAME);
+            HWND existing_main_wnd = FindWindow(MAIN_WND_CLASS, APP_NAME);
             if (existing_main_wnd == NULL) {
                 log_error(L"No running instance found even though mutex exists");
                 return 1;
@@ -128,7 +128,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     if (!instance_mutex) {
         if (GetLastError() == ERROR_ACCESS_DENIED) {
             // Try to open
-            instance_mutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, L"Zini.Disp");
+            instance_mutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, APP_FQN);
             if (!instance_mutex) {
                 // Failed
                 // TODO: MessageBox
@@ -171,15 +171,15 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
     // Determine a config file path if it's not supplied in the command line arguments
     if (config_file_path == NULL) {
         // Check if there exists a config file in the current working directory
-        if (!PathFileExists(L"disp_config.json")) {
+        if (!PathFileExists(DEFAULT_CONFIG_NAME)) {
             // No local config file, default to AppData if possible
             if (disp_config_get_appdata_path(&config_file_path) != DISP_CONFIG_SUCCESS) {
-                log_warning(
-                    L"Failed to get AppData config path, using \"disp_config.json\" relative to the working directory");
-                config_file_path = _wcsdup(L"disp_config.json");
+                log_warning(L"Failed to get AppData config path, using \"" DEFAULT_CONFIG_NAME
+                            "\" relative to the working directory");
+                config_file_path = _wcsdup(DEFAULT_CONFIG_NAME);
             }
         } else {
-            config_file_path = _wcsdup(L"disp_config.json");
+            config_file_path = _wcsdup(DEFAULT_CONFIG_NAME);
         }
     }
     log_debug(L"Using config file: %s", config_file_path);

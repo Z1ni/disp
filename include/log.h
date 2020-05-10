@@ -29,6 +29,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define LOG_ERROR 4
 #define LOG_NONE 5
 
+#define LOG_COLOR 255
+#define LOG_NO_COLOR 254
+
 #define log_trace(...) log_log(LOG_TRACE, __VA_ARGS__)
 #define log_debug(...) log_log(LOG_DEBUG, __VA_ARGS__)
 #define log_info(...) log_log(LOG_INFO, __VA_ARGS__)
@@ -39,6 +42,7 @@ void log_init(void);
 void log_finish(void);
 void log_set_level(int level);
 void log_set_file_level(int level);
+void log_set_color_mode(int mode);
 void log_log(int level, const wchar_t *format, ...);
 
 #endif

@@ -1,6 +1,6 @@
 ARCH?=x86_64
 CC=$(ARCH)-w64-mingw32-gcc
-CFLAGS=-std=gnu99 -Wall -Wextra -Wno-unused-parameter -Iinclude/ -Ires/ -mwindows -DLOG_COLOR_OUTPUT
+CFLAGS=-std=gnu99 -Wall -Wextra -Wno-unused-parameter -Iinclude/ -Ires/ -mconsole -mwindows
 LIBS=-lole32 -lshlwapi -l:libjansson.a
 SRCDIR=src
 OBJDIR=obj

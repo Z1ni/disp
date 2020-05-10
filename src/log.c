@@ -25,6 +25,7 @@ static wchar_t *log_level_str[6] = {L"TRACE", L"DEBUG", L"INFO", L"WARNING", L"E
 static const wchar_t *log_level_colors[5] = {L"\x1b[94m", L"\x1b[36m", L"\x1b[32m", L"\x1b[33m", L"\x1b[31m"};
 static int log_level = LOG_WARNING;
 static int file_log_level = LOG_NONE;
+static int color_mode = LOG_NO_COLOR;
 static FILE *logfile = NULL;
 
 void log_init(void) {
@@ -53,6 +54,10 @@ void log_set_file_level(int level) {
     file_log_level = level;
 }
 
+void log_set_color_mode(int mode) {
+    color_mode = mode;
+}
+
 void log_log(int level, const wchar_t *format, ...) {
     if (level < log_level && level < file_log_level) {
         return;
@@ -78,11 +83,12 @@ void log_log(int level, const wchar_t *format, ...) {
     wchar_t log_entry[1536] = {0};
     wchar_t file_log_entry[1536] = {0};
     wchar_t *con_level_str_p = NULL;
-#ifdef LOG_COLOR_OUTPUT
-    con_level_str_p = (wchar_t *) &level_str_color;
-#else
-    con_level_str_p = (wchar_t *) &level_str_nocolor;
-#endif
+
+    if (color_mode == LOG_COLOR) {
+        con_level_str_p = (wchar_t *) &level_str_color;
+    } else {
+        con_level_str_p = (wchar_t *) &level_str_nocolor;
+    }
     StringCbPrintf((wchar_t *) log_entry, 1536, L"[%s] [%s] %s\n", time_buf, con_level_str_p, msg);
     StringCbPrintf((wchar_t *) file_log_entry, 1536, L"[%s] [%s] %s\n", time_buf, level_str_nocolor, msg);
 

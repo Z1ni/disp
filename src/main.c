@@ -26,7 +26,7 @@ static void print_help(wchar_t **argv) {
     wprintf(L"Usage: %s [OPTIONS]\n\n", argv[0]);
 
     wprintf(L"disp - Simple display settings manager for Windows 7+\n");
-    wprintf(L"Copyright (C) 2019-2020 Mark \"zini\" M\xC3\xA4kinen\n\n");
+    wprintf(L"Copyright (C) 2019-2020 Mark \"zini\" Makinen\n\n");
 
     wprintf(L"Options:\n");
     wprintf(L"  -h, --help         Print (this) help\n");
@@ -40,9 +40,50 @@ static void print_help(wchar_t **argv) {
     wprintf(L"  -V, --version      Print version information and exit\n");
 }
 
+static int enable_vt_mode() {
+    // Try to enable support for Virtual Terminal Sequences
+    // Requires Windows 10 1511 or newer
+
+    HANDLE con_out_hndl = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (con_out_hndl == INVALID_HANDLE_VALUE) {
+        int err = GetLastError();
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"Failed to get output handle: %s (0x%08X)", err_msg, err);
+        LocalFree(err_msg);
+        return 1;
+    }
+
+    DWORD con_mode = 0;
+    if (!GetConsoleMode(con_out_hndl, &con_mode)) {
+        int err = GetLastError();
+        wchar_t *err_msg;
+        get_error_msg(err, &err_msg);
+        log_error(L"Failed to get console mode: %s (0x%08X)", err_msg, err);
+        LocalFree(err_msg);
+        return 1;
+    }
+
+    con_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    if (!SetConsoleMode(con_out_hndl, con_mode)) {
+        // Most likely not supported in this version of Windows
+        log_debug(L"Failed to enable virtual terminal processing");
+        return 1;
+    }
+
+    return 0;
+}
+
 int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, int n_show_cmd) {
 
     log_set_level(LOG_WARNING);
+
+    // Try to enable VT mode for colored logging support
+    // Default to no colors
+    if (enable_vt_mode() == 0) {
+        // VT mode enabled, use colors
+        log_set_color_mode(LOG_COLOR);
+    }
 
     // Parse command line arguments
     int argc = 0;
@@ -51,6 +92,8 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     wchar_t *config_file_path = NULL;
     wchar_t *apply_preset_name = NULL;
+
+    int is_verbose = 0;
 
     for (int i = 1; i < argc; i++) {
         if (wcscmp(argv[i], L"-c") == 0 || wcscmp(argv[i], L"--config") == 0) {
@@ -78,6 +121,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
         } else if (wcscmp(argv[i], L"-v") == 0 || wcscmp(argv[i], L"--verbose") == 0) {
             // Verbose
             log_set_level(LOG_TRACE);
+            is_verbose = 1;
         } else if (wcscmp(argv[i], L"-l") == 0) {
             // Create logfile
             log_set_file_level(LOG_TRACE);
@@ -94,6 +138,14 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
 
     LocalFree(argv);
 
+    if (!is_verbose) {
+        // If we're not outputting verbose output, detach the console
+        // Otherwise the program would have an open console window floating about
+        // We could build the program without -mconsole flag, but then the console output (-h, -V, etc.)
+        // wouldn't work.
+        FreeConsole();
+    }
+
     // Check if an instance is already running
     HANDLE instance_mutex = CreateMutex(NULL, FALSE, APP_FQN);
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
@@ -106,6 +158,8 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
             HWND existing_main_wnd = FindWindow(MAIN_WND_CLASS, APP_NAME);
             if (existing_main_wnd == NULL) {
                 log_error(L"No running instance found even though mutex exists");
+                MessageBox(NULL, APP_NAME, L"Could not find a running instance of " APP_NAME,
+                           MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
                 return 1;
             }
             // Send a message to the existing main window
@@ -131,12 +185,12 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
             instance_mutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, APP_FQN);
             if (!instance_mutex) {
                 // Failed
-                // TODO: MessageBox
                 int err = GetLastError();
                 wchar_t *err_msg;
                 get_error_msg(err, &err_msg);
                 log_error(L"Failed to open mutex: %s (0x%08X)", err_msg, err);
                 LocalFree(err_msg);
+                MessageBox(NULL, APP_NAME, L"Failed to open mutex, exiting", MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
                 return 1;
             }
         }
@@ -145,7 +199,7 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
         get_error_msg(err, &err_msg);
         log_error(L"Could not create app mutex: %s (0x%08X)", err_msg, err);
         LocalFree(err_msg);
-        // TODO: MessageBox
+        MessageBox(NULL, APP_NAME, L"Could not create app mutex, exiting", MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return 1;
     }
 

@@ -57,7 +57,7 @@ BEGIN
             VALUE "FileDescription", "Simple display settings manager"
             VALUE "FileVersion", "0.1.0.0"
             VALUE "InternalName", "disp"
-            VALUE "LegalCopyright", "© 2019 Mark ""zini"" Mäkinen"
+            VALUE "LegalCopyright", "© 2020 Mark ""zini"" Mäkinen"
             VALUE "OriginalFilename", "disp.exe"
             VALUE "ProductName", "Disp"
             VALUE "ProductVersion", "0.1.0.0"

@@ -36,6 +36,7 @@ static void print_help(wchar_t **argv) {
     wprintf(L"                     commanding process will exit immediately. Otherwise the\n");
     wprintf(L"                     started process will perform the change and keep running.\n");
     wprintf(L"  -v, --verbose      Verbose output: log all messages to stdout\n");
+    wprintf(L"  --color-log        Force colored log output while verbose logging\n");
     wprintf(L"  -l                 Log to file: log all messages to \"disp.log\"\n");
     wprintf(L"  -V, --version      Print version information and exit\n");
 }
@@ -129,6 +130,9 @@ int WINAPI WinMain(HINSTANCE h_inst, HINSTANCE h_previnst, LPSTR lp_cmd_line, in
             // Version
             wprintf(APP_NAME L" " APP_VER L"\n");
             return 0;
+        } else if (wcscmp(argv[i], L"--color-log") == 0) {
+            // Force color log output
+            log_set_color_mode(LOG_COLOR);
         } else if (wcscmp(argv[i], L"-h") == 0 || wcscmp(argv[i], L"--help") == 0) {
             // Help
             print_help(argv);

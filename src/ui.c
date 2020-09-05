@@ -411,8 +411,21 @@ static LRESULT CALLBACK virt_desktop_wnd_proc(HWND hwnd, UINT umsg, WPARAM wpara
     int cur_color = 0;
     int row_first_color = 0;
 
+    // Get the primary monitor top left coordinates
+    POINT text_pos = {0};
+    SetLastError(ERROR_SUCCESS);
+    if (MapWindowPoints(NULL, hwnd, &text_pos, 1) == 0) {
+        int err = GetLastError();
+        if (err != ERROR_SUCCESS) {
+            wchar_t *err_msg;
+            get_error_msg(err, &err_msg);
+            log_error(L"MapWindowPoints failed: %s (0x%08X)", err_msg, err);
+            LocalFree(err_msg);
+        }
+    }
+
     RECT text_rect;
-    SetRect(&text_rect, 10, 10, 500, 100);
+    SetRect(&text_rect, text_pos.x + 10, text_pos.y + 10, text_pos.x + 10 + 500, text_pos.y + 10 + 100);
 
     switch (umsg) {
         case WM_PAINT:;

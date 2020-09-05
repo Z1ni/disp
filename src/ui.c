@@ -246,7 +246,11 @@ static LRESULT CALLBACK main_wnd_proc(HWND hwnd, UINT umsg, WPARAM wparam, LPARA
                                      ctx->display_virtual_size.width, ctx->display_virtual_size.height);
                     for (size_t i = 0; i < ctx->monitor_count; i++) {
                         monitor_t mon = ctx->monitors[i];
-                        StringCbPrintfEx(end, rem, &end, &rem, 0, L"%s (%s):\n", mon.friendly_name, mon.name);
+                        StringCbPrintfEx(end, rem, &end, &rem, 0, L"%s (%s)", mon.friendly_name, mon.name);
+                        if (mon.primary == TRUE) {
+                            StringCbPrintfEx(end, rem, &end, &rem, 0, L" [primary]");
+                        }
+                        StringCbPrintfEx(end, rem, &end, &rem, 0, L":\n");
                         StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Device ID: %s\n", mon.device_id);
                         StringCbPrintfEx(end, rem, &end, &rem, 0, L"  Resolution: %ldx%ld\n",
                                          mon.rect.right - mon.rect.left, mon.rect.bottom - mon.rect.top);

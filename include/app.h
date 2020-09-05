@@ -47,6 +47,7 @@ typedef struct {
     RECT rect;
     POINTL virt_pos;
     DEVMODE devmode;
+    BOOL primary;
     wchar_t device_id[128];
 } monitor_t;
 

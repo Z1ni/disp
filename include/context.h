@@ -34,6 +34,7 @@ typedef struct {
     HANDLE instance_mutex;
     size_t monitor_count;
     monitor_t *monitors;
+    UINT primary_monitor_idx;
     POINTL min_monitor_pos;
     HFONT align_pattern_font;
 } app_ctx_t;

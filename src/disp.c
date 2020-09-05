@@ -158,6 +158,14 @@ void populate_display_data(app_ctx_t *ctx) {
             continue;
         }
 
+        if ((dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) == DISPLAY_DEVICE_PRIMARY_DEVICE) {
+            // This is the primary display of the system
+            ctx->monitors[monitor_idx].primary = TRUE;
+            ctx->primary_monitor_idx = (UINT) monitor_idx;
+        } else {
+            ctx->monitors[monitor_idx].primary = FALSE;
+        }
+
         // Enumerate monitors
         while (EnumDisplayDevices(dd.DeviceName, dev_mon, &dd_mon, EDD_GET_DEVICE_INTERFACE_NAME)) {
             // Copy the device ID to the monitor_t entry

@@ -84,6 +84,34 @@ static void set_error_info(app_config_t *app_config, const json_error_t *json_er
     log_error(L"Jansson error: %s", app_config->error_str);
 }
 
+static void disp_config_preset_destroy(display_preset_t *preset) {
+    if (preset == NULL) {
+        return;
+    }
+    if (preset->display_count > 0) {
+        for (size_t a = 0; a < preset->display_count; a++) {
+            free((wchar_t *) preset->display_conf[a]->device_path);
+            free(preset->display_conf[a]);
+        }
+        free(preset->display_conf);
+    }
+    free((wchar_t *) preset->name);
+    free(preset);
+}
+
+void disp_config_destroy(app_config_t *config) {
+    if (config->preset_count > 0) {
+        if (config->presets == NULL) {
+            return;
+        }
+        for (size_t i = 0; i < config->preset_count; i++) {
+            display_preset_t *preset = config->presets[i];
+            disp_config_preset_destroy(preset);
+        }
+        free(config->presets);
+    }
+}
+
 int disp_config_get_appdata_path(wchar_t **config_path_out) {
     wchar_t conf_path[MAX_PATH] = {0};
 
@@ -395,6 +423,37 @@ int disp_config_preset_matches_current(const display_preset_t *preset, const app
     return DISP_CONFIG_SUCCESS;
 }
 
+static int disp_config_get_preset_idx_by_name(const wchar_t *name, app_ctx_t *ctx) {
+    for (size_t i = 0; i < ctx->config.preset_count; i++) {
+        display_preset_t *preset = ctx->config.presets[i];
+        int cmp_res =
+            CompareStringEx(LOCALE_NAME_INVARIANT, NORM_IGNORECASE, name, -1, preset->name, -1, NULL, NULL, 0);
+        if (cmp_res == 0) {
+            // Comparison failed
+            int err = GetLastError();
+            wchar_t *err_msg;
+            get_error_msg(err, &err_msg);
+            log_error(L"Failed to compare preset names: %s (0x%08X)", err_msg, err);
+            LocalFree(err_msg);
+            return DISP_CONFIG_ERROR_GENERAL;
+        }
+        if (cmp_res == CSTR_EQUAL) {
+            // Match
+            return i;
+        }
+    }
+    return DISP_CONFIG_ERROR_NO_MATCH;
+}
+
+int disp_config_exists(const wchar_t *name, app_ctx_t *ctx) {
+    // Check for existing matching preset (ignore preset name case)
+    int ret = disp_config_get_preset_idx_by_name(name, ctx);
+    if (ret < 0) {
+        return ret;
+    }
+    return DISP_CONFIG_SUCCESS;
+}
+
 int disp_config_create_preset(const wchar_t *name, app_ctx_t *ctx) {
     // Get display count
     size_t display_count = ctx->monitor_count;
@@ -426,41 +485,34 @@ int disp_config_create_preset(const wchar_t *name, app_ctx_t *ctx) {
 
     // Add to config presets
     app_config_t *config = &(ctx->config);
-    // Reallocate
-    void *realloc_ptr = realloc(config->presets, (config->preset_count + 1) * sizeof(display_preset_t *));
-    if (realloc_ptr == NULL) {
-        // Realloc failed
-        log_error(L"realloc failed");
-        abort();
-    }
-    config->presets = realloc_ptr;
 
-    config->presets[config->preset_count] = preset;
-    config->preset_count = config->preset_count + 1;
+    // Get the preset index of the possibly existing preset
+    int ext_preset_idx = disp_config_get_preset_idx_by_name(name, ctx);
+    if (ext_preset_idx >= 0) {
+        log_debug(L"Replacing existing preset");
+        // Free the existing preset
+        disp_config_preset_destroy(config->presets[ext_preset_idx]);
+        // Update the preset array pointer
+        config->presets[ext_preset_idx] = preset;
+    } else if (ext_preset_idx == DISP_CONFIG_ERROR_NO_MATCH) {
+        // No existing preset
+        log_debug(L"Adding new preset");
+        // Reallocate
+        void *realloc_ptr = realloc(config->presets, (config->preset_count + 1) * sizeof(display_preset_t *));
+        if (realloc_ptr == NULL) {
+            // Realloc failed
+            log_error(L"realloc failed");
+            abort();
+        }
+        config->presets = realloc_ptr;
+
+        config->presets[config->preset_count] = preset;
+        config->preset_count = config->preset_count + 1;
+    } else {
+        // Error
+        disp_config_preset_destroy(preset);
+        return DISP_CONFIG_ERROR_GENERAL;
+    }
 
     return DISP_CONFIG_SUCCESS;
-}
-
-void disp_config_destroy(app_config_t *config) {
-    if (config->preset_count > 0) {
-        if (config->presets == NULL) {
-            return;
-        }
-        for (size_t i = 0; i < config->preset_count; i++) {
-            display_preset_t *preset = config->presets[i];
-            if (preset == NULL) {
-                continue;
-            }
-            if (preset->display_count > 0) {
-                for (size_t a = 0; a < preset->display_count; a++) {
-                    free((wchar_t *) preset->display_conf[a]->device_path);
-                    free(preset->display_conf[a]);
-                }
-                free(preset->display_conf);
-            }
-            free((wchar_t *) preset->name);
-            free(preset);
-        }
-        free(config->presets);
-    }
 }

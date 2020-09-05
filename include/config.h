@@ -63,6 +63,7 @@ wchar_t *disp_config_get_err_msg(const app_config_t *config);
 int disp_config_preset_get_display(const display_preset_t *preset, const wchar_t *path,
                                    display_settings_t **settings); // returns DISP_CONFIG_SUCCESS or error
 int disp_config_preset_matches_current(const display_preset_t *preset, const app_ctx_t *ctx);
+int disp_config_exists(const wchar_t *name, app_ctx_t *ctx);
 int disp_config_create_preset(const wchar_t *name, app_ctx_t *ctx);
 
 void disp_config_destroy(app_config_t *config);

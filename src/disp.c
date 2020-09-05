@@ -466,15 +466,54 @@ BOOL change_display_orientation(app_ctx_t *ctx, monitor_t *mon, BYTE orientation
 
 void save_current_config(app_ctx_t *ctx) {
     // Create input dialog
-    log_debug(L"Showing preset name dialog");
     preset_dialog_data_t data = {0};
-    show_save_dialog(ctx, &data);
-    if (data.cancel == TRUE) {
-        // User canceled
-        log_debug(L"User canceled name input");
+    while (1) {
+        log_debug(L"Showing preset name dialog");
+        ZeroMemory(&data, sizeof(preset_dialog_data_t));
+        show_save_dialog(ctx, &data);
+        if (data.cancel == TRUE) {
+            // User canceled
+            log_debug(L"User canceled name input");
+            return;
+        }
+        log_debug(L"Preset name dialog closed, selected name: \"%s\"", data.preset_name);
+        // Check for name conflicts
+        int ex_res = disp_config_exists(data.preset_name, ctx);
+        if (ex_res == DISP_CONFIG_SUCCESS) {
+            // Existing preset
+            // Ask the user whether to overwrite the preset
+            // TODO: Move to ui.c?
+            log_debug(L"Preset name conflict");
+            wchar_t msg[200] = {0};
+            StringCbPrintf((wchar_t *) msg, 200,
+                           L"There already exists a preset with the name \"%s\".\nDo you want to overwrite the preset?",
+                           data.preset_name);
+            int res = MessageBox(ctx->main_window_hwnd, msg, APP_NAME,
+                                 MB_YESNOCANCEL | MB_ICONEXCLAMATION | MB_SETFOREGROUND | MB_DEFBUTTON3);
+            if (res == IDNO) {
+                // Ask the name again
+                log_debug(L"Asking user to choose another name");
+                continue;
+            } else if (res == IDCANCEL) {
+                // Cancel save
+                log_debug(L"User canceled because of an existing preset");
+                return;
+            }
+            // Overwrite the preset
+            log_debug(L"Overwriting existing preset");
+            break;
+        } else if (ex_res == DISP_CONFIG_ERROR_NO_MATCH) {
+            // No name conflicts, save
+            log_debug(L"Unique preset name");
+            break;
+        }
+        // disp_config_exists failed
+        log_error(L"disp_config_exists failed: %d", ex_res);
+        MessageBox(ctx->main_window_hwnd, L"Preset config checking failed", APP_NAME,
+                   MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
         return;
     }
-    log_debug(L"Preset name dialog closed, selected name: \"%s\"", data.preset_name);
+
     // Add new preset to the app_config
     if (disp_config_create_preset(data.preset_name, ctx) != DISP_CONFIG_SUCCESS) {
         // Failed
